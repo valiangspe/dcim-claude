@@ -1,8 +1,11 @@
 <template>
   <div class="pending-requests">
+    <div v-if="loading" class="text-center py-5"><div class="spinner-border"></div></div>
+    <template v-else>
     <div class="card">
-      <div class="card-header bg-primary text-white">
+      <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
         <h5 class="mb-0">Pending Change Requests</h5>
+        <button class="btn btn-sm btn-light" @click="openCreate">+ New Request</button>
       </div>
       <div class="card-body">
         <div class="table-responsive">
@@ -19,7 +22,7 @@
             </thead>
             <tbody>
               <tr v-for="req in pendingRequests" :key="req.id">
-                <td><strong>{{ req.id }}</strong></td>
+                <td><strong>{{ req.requestId }}</strong></td>
                 <td>{{ req.requester }}</td>
                 <td>{{ req.type }}</td>
                 <td>
@@ -42,61 +45,108 @@
         Total pending: {{ pendingRequests.length }} requests
       </div>
     </div>
+    </template>
+
+    <div v-if="showModal" class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">New Request</h5>
+            <button type="button" class="btn-close" @click="showModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">Request ID</label>
+              <input v-model="form.requestId" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Requester</label>
+              <input v-model="form.requester" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Type</label>
+              <select v-model="form.type" class="form-select">
+                <option>Hardware</option>
+                <option>Network</option>
+                <option>Software</option>
+                <option>Access</option>
+                <option>Emergency</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Priority</label>
+              <select v-model="form.priority" class="form-select">
+                <option>Critical</option>
+                <option>High</option>
+                <option>Medium</option>
+                <option>Low</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Status</label>
+              <select v-model="form.status" class="form-select">
+                <option>Pending Review</option>
+                <option>Waiting Approval</option>
+                <option>In Progress</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Requested Date</label>
+              <input v-model="form.requestedDate" type="date" class="form-control" />
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showModal = false">Cancel</button>
+            <button class="btn btn-primary" @click="save" :disabled="saving">
+              <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-interface PendingRequest {
-  id: string
-  requester: string
-  type: string
-  priority: string
-  status: string
-  requestedDate: string
+import { ref, onMounted } from 'vue'
+import { changeRequestsApi, type ChangeRequest } from '../../services/api'
+
+const pendingRequests = ref<ChangeRequest[]>([])
+const loading = ref(true)
+const showModal = ref(false)
+const saving = ref(false)
+
+const defaultForm = { requestId: '', requester: '', type: 'Hardware', priority: 'Medium', status: 'Pending Review', requestedDate: '' }
+const form = ref({ ...defaultForm })
+
+async function loadData() {
+  pendingRequests.value = await changeRequestsApi.getAll()
 }
 
-const pendingRequests: PendingRequest[] = [
-  {
-    id: 'CHG-001',
-    requester: 'John Smith',
-    type: 'Hardware',
-    priority: 'High',
-    status: 'Pending Review',
-    requestedDate: '2026-02-18'
-  },
-  {
-    id: 'CHG-002',
-    requester: 'Sarah Johnson',
-    type: 'Network',
-    priority: 'Medium',
-    status: 'Waiting Approval',
-    requestedDate: '2026-02-17'
-  },
-  {
-    id: 'CHG-003',
-    requester: 'Mike Chen',
-    type: 'Software',
-    priority: 'Low',
-    status: 'Pending Review',
-    requestedDate: '2026-02-16'
-  },
-  {
-    id: 'CHG-004',
-    requester: 'Emma Wilson',
-    type: 'Access',
-    priority: 'High',
-    status: 'Waiting Approval',
-    requestedDate: '2026-02-15'
-  },
-  {
-    id: 'CHG-005',
-    requester: 'David Brown',
-    type: 'Emergency',
-    priority: 'Critical',
-    status: 'In Progress',
-    requestedDate: '2026-02-14'
+onMounted(async () => {
+  try {
+    await loadData()
+  } finally {
+    loading.value = false
   }
-]
+})
+
+function openCreate() {
+  form.value = { ...defaultForm }
+  showModal.value = true
+}
+
+async function save() {
+  saving.value = true
+  try {
+    await changeRequestsApi.create(form.value)
+    showModal.value = false
+    await loadData()
+  } finally {
+    saving.value = false
+  }
+}
 
 const getPriorityBadgeClass = (priority: string): string => {
   const classes = 'badge'

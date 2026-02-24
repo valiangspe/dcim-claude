@@ -2,6 +2,9 @@
   <div class="carbon-footprint">
     <h2 class="mb-4">Carbon Footprint</h2>
 
+    <div v-if="loading" class="text-center py-5"><div class="spinner-border"></div></div>
+    <div v-else-if="error" class="alert alert-danger">{{ error }}</div>
+    <template v-else>
     <!-- Total CO2e Card -->
     <div class="row mb-4">
       <div class="col-md-6">
@@ -42,41 +45,11 @@
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td>January</td>
-              <td>13.2</td>
-              <td><span class="text-danger">↑ 5%</span></td>
-              <td><span class="badge bg-warning">Above Avg</span></td>
-            </tr>
-            <tr>
-              <td>February</td>
-              <td>12.8</td>
-              <td><span class="text-success">↓ 3%</span></td>
-              <td><span class="badge bg-info">On Track</span></td>
-            </tr>
-            <tr>
-              <td>March</td>
-              <td>11.5</td>
-              <td><span class="text-success">↓ 10%</span></td>
-              <td><span class="badge bg-success">Good</span></td>
-            </tr>
-            <tr>
-              <td>April</td>
-              <td>10.9</td>
-              <td><span class="text-success">↓ 5%</span></td>
-              <td><span class="badge bg-success">Good</span></td>
-            </tr>
-            <tr>
-              <td>May</td>
-              <td>11.2</td>
-              <td><span class="text-danger">↑ 2%</span></td>
-              <td><span class="badge bg-info">On Track</span></td>
-            </tr>
-            <tr>
-              <td>June</td>
-              <td>10.8</td>
-              <td><span class="text-success">↓ 4%</span></td>
-              <td><span class="badge bg-success">Good</span></td>
+            <tr v-for="row in monthlyBreakdown" :key="row.month">
+              <td>{{ row.month }}</td>
+              <td>{{ row.value }}</td>
+              <td><span :class="row.trend.class">{{ row.trend.text }}</span></td>
+              <td><span class="badge" :class="row.status.class">{{ row.status.label }}</span></td>
             </tr>
           </tbody>
         </table>
@@ -118,12 +91,45 @@
         </div>
       </div>
     </div>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
-// Mock data for Carbon Footprint component
-// No imports needed
+import { ref, computed, onMounted } from 'vue'
+import { environmentalMetricsApi, type EnvironmentalMetric } from '../../services/api'
+
+const metrics = ref<EnvironmentalMetric[]>([])
+const loading = ref(true)
+const error = ref('')
+
+const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+
+const monthlyBreakdown = computed(() => {
+  const co2Metrics = metrics.value.filter(m => m.unit === 'tonnes' || m.category === 'carbon')
+  return co2Metrics.map(m => {
+    const trend = m.value <= 11.5 ? { text: '↓ good', class: 'text-success' } : { text: '↑', class: 'text-danger' }
+    const status = m.value <= 11.0 ? { label: 'Good', class: 'bg-success' }
+      : m.value <= 12.0 ? { label: 'On Track', class: 'bg-info' }
+      : { label: 'Above Avg', class: 'bg-warning' }
+    return {
+      month: monthNames[m.month - 1] || `Month ${m.month}`,
+      value: m.value,
+      trend,
+      status,
+    }
+  })
+})
+
+onMounted(async () => {
+  try {
+    metrics.value = await environmentalMetricsApi.getAll()
+  } catch (e: unknown) {
+    error.value = e instanceof Error ? e.message : 'Failed to load metrics'
+  } finally {
+    loading.value = false
+  }
+})
 </script>
 
 <style scoped>

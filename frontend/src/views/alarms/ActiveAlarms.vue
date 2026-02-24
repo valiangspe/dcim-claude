@@ -2,13 +2,15 @@
   <div class="container-fluid">
     <h1 class="mb-4">Active Alarms</h1>
 
+    <div v-if="loading" class="text-center py-5"><div class="spinner-border"></div></div>
+    <template v-else>
     <!-- Severity Summary -->
     <div class="row mb-4">
       <div class="col-md-3">
         <div class="card border-danger">
           <div class="card-body">
             <h6 class="card-title text-danger">Critical</h6>
-            <p class="h4 mb-0">3</p>
+            <p class="h4 mb-0">{{ activeAlarms.filter(a => a.severity === 'Critical').length }}</p>
           </div>
         </div>
       </div>
@@ -16,7 +18,7 @@
         <div class="card border-warning">
           <div class="card-body">
             <h6 class="card-title text-warning">High</h6>
-            <p class="h4 mb-0">7</p>
+            <p class="h4 mb-0">{{ activeAlarms.filter(a => a.severity === 'High').length }}</p>
           </div>
         </div>
       </div>
@@ -24,7 +26,7 @@
         <div class="card border-info">
           <div class="card-body">
             <h6 class="card-title text-info">Medium</h6>
-            <p class="h4 mb-0">12</p>
+            <p class="h4 mb-0">{{ activeAlarms.filter(a => a.severity === 'Medium').length }}</p>
           </div>
         </div>
       </div>
@@ -32,7 +34,7 @@
         <div class="card border-secondary">
           <div class="card-body">
             <h6 class="card-title text-secondary">Low</h6>
-            <p class="h4 mb-0">5</p>
+            <p class="h4 mb-0">{{ activeAlarms.filter(a => a.severity === 'Low').length }}</p>
           </div>
         </div>
       </div>
@@ -65,64 +67,58 @@
               </td>
               <td>{{ alarm.message }}</td>
               <td>
-                <button class="btn btn-sm btn-outline-primary">Acknowledge</button>
+                <button
+                  v-if="!alarm.acknowledged"
+                  class="btn btn-sm btn-outline-primary"
+                  :disabled="acknowledging === alarm.id"
+                  @click="acknowledge(alarm)"
+                >
+                  <span v-if="acknowledging === alarm.id" class="spinner-border spinner-border-sm me-1"></span>
+                  Acknowledge
+                </button>
+                <span v-else class="badge bg-success">Acknowledged</span>
               </td>
             </tr>
           </tbody>
         </table>
       </div>
     </div>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
-interface Alarm {
-  id: number
-  time: Date
-  source: string
-  severity: 'Critical' | 'High' | 'Medium' | 'Low'
-  message: string
+import { ref, onMounted } from 'vue'
+import { alarmsApi, type Alarm } from '../../services/api'
+
+const activeAlarms = ref<Alarm[]>([])
+const loading = ref(true)
+const acknowledging = ref<number | null>(null)
+
+async function loadData() {
+  activeAlarms.value = await alarmsApi.getAll()
 }
 
-const activeAlarms: Alarm[] = [
-  {
-    id: 1,
-    time: new Date(Date.now() - 5 * 60000),
-    source: 'Server Rack A-01',
-    severity: 'Critical',
-    message: 'Temperature threshold exceeded: 42°C',
-  },
-  {
-    id: 2,
-    time: new Date(Date.now() - 15 * 60000),
-    source: 'PDU-B-03',
-    severity: 'Critical',
-    message: 'Power consumption anomaly detected',
-  },
-  {
-    id: 3,
-    time: new Date(Date.now() - 25 * 60000),
-    source: 'Cooling Unit C-02',
-    severity: 'High',
-    message: 'Refrigerant pressure low',
-  },
-  {
-    id: 4,
-    time: new Date(Date.now() - 45 * 60000),
-    source: 'Network Switch D-01',
-    severity: 'High',
-    message: 'Port utilization above 85%',
-  },
-  {
-    id: 5,
-    time: new Date(Date.now() - 75 * 60000),
-    source: 'UPS Battery Bank',
-    severity: 'Medium',
-    message: 'Battery health degradation detected',
-  },
-]
+onMounted(async () => {
+  try {
+    await loadData()
+  } finally {
+    loading.value = false
+  }
+})
 
-function formatTime(date: Date): string {
+async function acknowledge(alarm: Alarm) {
+  acknowledging.value = alarm.id
+  try {
+    await alarmsApi.update(alarm.id, { acknowledged: true })
+    await loadData()
+  } finally {
+    acknowledging.value = null
+  }
+}
+
+function formatTime(isoString: string): string {
+  const date = new Date(isoString)
   const now = new Date()
   const diffMs = now.getTime() - date.getTime()
   const diffMins = Math.floor(diffMs / 60000)

@@ -1,9 +1,13 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useTier } from '../../composables/useTier'
+import { alarmsApi, type Alarm } from '../../services/api'
 
 const { hasAccess, currentTier } = useTier()
 const isPlusOrAbove = computed(() => hasAccess('plus'))
+
+const loading = ref(true)
+const error = ref('')
 
 const refreshInterval = computed(() => {
   if (currentTier.value === 'platinum') return '10 sec'
@@ -20,11 +24,23 @@ const kpis = [
   { label: 'Network Uptime', value: '99.97', unit: '%', color: 'success', icon: 'bi-wifi' },
 ]
 
-const alerts = [
-  { severity: 'critical', count: 3, last: '2 min ago' },
-  { severity: 'warning', count: 9, last: '14 min ago' },
-  { severity: 'info', count: 24, last: '1 min ago' },
-]
+const allAlarms = ref<Alarm[]>([])
+
+const alerts = computed(() => {
+  const grouped: Record<string, Alarm[]> = {}
+  for (const alarm of allAlarms.value) {
+    const sev = alarm.severity.toLowerCase()
+    if (!grouped[sev]) grouped[sev] = []
+    grouped[sev].push(alarm)
+  }
+  return ['critical', 'warning', 'info']
+    .filter(sev => grouped[sev]?.length)
+    .map(sev => ({
+      severity: sev,
+      count: grouped[sev].length,
+      last: grouped[sev][0]?.time ?? '',
+    }))
+})
 
 const quickStats = [
   { label: 'Total Servers', value: '1,247' },
@@ -42,6 +58,16 @@ const sparklineData = [
   { time: '20:00', power: 2820, pue: 1.38, cooling: 75 },
   { time: 'Now', power: 2847, pue: 1.38, cooling: 76 },
 ]
+
+onMounted(async () => {
+  try {
+    allAlarms.value = await alarmsApi.getAll()
+  } catch (e: unknown) {
+    error.value = e instanceof Error ? e.message : 'Failed to load alarms'
+  } finally {
+    loading.value = false
+  }
+})
 </script>
 
 <template>
@@ -53,6 +79,9 @@ const sparklineData = [
       </span>
     </div>
 
+    <div v-if="loading" class="text-center py-5"><div class="spinner-border"></div></div>
+    <div v-else-if="error" class="alert alert-danger">{{ error }}</div>
+    <template v-else>
     <!-- KPI Cards -->
     <div class="row g-3 mb-4">
       <div v-for="kpi in kpis" :key="kpi.label" class="col-sm-6 col-lg-4 col-xl-2">
@@ -154,5 +183,6 @@ const sparklineData = [
         </table>
       </div>
     </div>
+    </template>
   </div>
 </template>

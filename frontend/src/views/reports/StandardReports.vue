@@ -1,8 +1,11 @@
 <template>
   <div class="standard-reports">
-    <div class="card">
-      <div class="card-header bg-primary text-white">
+    <div v-if="loading" class="text-center py-5"><div class="spinner-border"></div></div>
+    <div v-else-if="error" class="alert alert-danger">{{ error }}</div>
+    <div v-else class="card">
+      <div class="card-header bg-primary text-white d-flex align-items-center justify-content-between">
         <h5 class="mb-0">Standard Reports</h5>
+        <button class="btn btn-sm btn-light" @click="openCreate">Add Report</button>
       </div>
       <div class="card-body">
         <div class="row g-3">
@@ -21,6 +24,7 @@
                 <div class="d-flex gap-2">
                   <button class="btn btn-sm btn-primary flex-grow-1">Generate Now</button>
                   <button class="btn btn-sm btn-outline-secondary">View History</button>
+                  <button class="btn btn-sm btn-outline-primary" @click="openEdit(report)">Edit</button>
                 </div>
               </div>
             </div>
@@ -31,62 +35,96 @@
         Available reports: {{ reports.length }}
       </div>
     </div>
+
+    <!-- Modal -->
+    <div v-if="showModal" class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">{{ editing ? 'Edit' : 'Add' }} Report</h5>
+            <button type="button" class="btn-close" @click="showModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">Name</label>
+              <input v-model="form.name" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Description</label>
+              <textarea v-model="form.description" class="form-control" rows="3"></textarea>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Color</label>
+              <input v-model="form.color" type="color" class="form-control form-control-color" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Last Run</label>
+              <input v-model="form.lastRun" type="date" class="form-control" />
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showModal = false">Cancel</button>
+            <button class="btn btn-primary" @click="save" :disabled="saving">
+              <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-interface Report {
-  id: string
-  name: string
-  description: string
-  color: string
-  lastRun: string
+import { ref, onMounted } from 'vue'
+import { reportsApi, type Report } from '../../services/api'
+
+const reports = ref<Report[]>([])
+const loading = ref(true)
+const error = ref('')
+
+const showModal = ref(false)
+const editing = ref<Report | null>(null)
+const saving = ref(false)
+const form = ref({ name: '', description: '', color: '#0d6efd', lastRun: '' })
+
+async function loadData() {
+  reports.value = await reportsApi.getAll()
 }
 
-const reports: Report[] = [
-  {
-    id: '1',
-    name: 'Power Consumption Report',
-    description: 'Monthly power usage, costs, and efficiency metrics',
-    color: '#ffc107',
-    lastRun: '2026-02-18'
-  },
-  {
-    id: '2',
-    name: 'Cooling Performance Report',
-    description: 'Temperature monitoring and cooling efficiency analysis',
-    color: '#0dcaf0',
-    lastRun: '2026-02-19'
-  },
-  {
-    id: '3',
-    name: 'Space Utilization Report',
-    description: 'Rack and floor space capacity analysis',
-    color: '#198754',
-    lastRun: '2026-02-17'
-  },
-  {
-    id: '4',
-    name: 'Equipment Inventory Report',
-    description: 'Complete asset listing and depreciation tracking',
-    color: '#6c757d',
-    lastRun: '2026-02-15'
-  },
-  {
-    id: '5',
-    name: 'Network Performance Report',
-    description: 'Bandwidth utilization and network health metrics',
-    color: '#0d6efd',
-    lastRun: '2026-02-16'
-  },
-  {
-    id: '6',
-    name: 'Compliance Report',
-    description: 'ISO 22237 and regulatory compliance summary',
-    color: '#dc3545',
-    lastRun: '2026-02-14'
+onMounted(async () => {
+  try {
+    await loadData()
+  } catch (e: unknown) {
+    error.value = e instanceof Error ? e.message : 'Failed to load reports'
+  } finally {
+    loading.value = false
   }
-]
+})
+
+function openCreate() {
+  editing.value = null
+  form.value = { name: '', description: '', color: '#0d6efd', lastRun: '' }
+  showModal.value = true
+}
+
+function openEdit(report: Report) {
+  editing.value = report
+  form.value = { name: report.name, description: report.description, color: report.color, lastRun: report.lastRun }
+  showModal.value = true
+}
+
+async function save() {
+  saving.value = true
+  try {
+    if (editing.value) await reportsApi.update(editing.value.id, form.value)
+    else await reportsApi.create(form.value)
+    showModal.value = false
+    await loadData()
+  } finally {
+    saving.value = false
+  }
+}
 </script>
 
 <style scoped>

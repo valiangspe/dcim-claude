@@ -5,10 +5,12 @@
         <h1 class="h3 mb-0">User Management</h1>
       </div>
       <div class="col-auto">
-        <button class="btn btn-primary btn-sm">+ Add User</button>
+        <button class="btn btn-primary btn-sm" @click="openCreate">+ Add User</button>
       </div>
     </div>
 
+    <div v-if="loading" class="text-center py-5"><div class="spinner-border"></div></div>
+    <template v-else>
     <div class="card">
       <div class="card-body">
         <table class="table table-hover mb-0">
@@ -36,57 +38,118 @@
                 </span>
               </td>
               <td>
-                <button class="btn btn-sm btn-outline-secondary">Edit</button>
+                <button class="btn btn-sm btn-outline-secondary me-1" @click="openEdit(user)">Edit</button>
+                <button class="btn btn-sm btn-outline-danger" @click="remove(user.id)">Delete</button>
               </td>
             </tr>
           </tbody>
         </table>
       </div>
     </div>
+    </template>
+
+    <!-- Modal -->
+    <div v-if="showModal" class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">{{ editing ? 'Edit' : 'Add' }} User</h5>
+            <button type="button" class="btn-close" @click="showModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">Name</label>
+              <input v-model="form.name" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Email</label>
+              <input v-model="form.email" type="email" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Role</label>
+              <select v-model="form.role" class="form-select">
+                <option>Administrator</option>
+                <option>Operator</option>
+                <option>Engineer</option>
+                <option>Viewer</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Status</label>
+              <select v-model="form.status" class="form-select">
+                <option>Active</option>
+                <option>Inactive</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showModal = false">Cancel</button>
+            <button class="btn btn-primary" @click="save" :disabled="saving">
+              <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-const users = [
-  {
-    id: 1,
-    name: 'John Administrator',
-    email: 'john.admin@datacenter.local',
-    role: 'Administrator',
-    lastLogin: '2026-02-20 14:32 UTC',
-    status: 'Active'
-  },
-  {
-    id: 2,
-    name: 'Sarah Operations',
-    email: 'sarah.ops@datacenter.local',
-    role: 'Operator',
-    lastLogin: '2026-02-20 08:15 UTC',
-    status: 'Active'
-  },
-  {
-    id: 3,
-    name: 'Mike Engineer',
-    email: 'mike.eng@datacenter.local',
-    role: 'Engineer',
-    lastLogin: '2026-02-19 23:45 UTC',
-    status: 'Active'
-  },
-  {
-    id: 4,
-    name: 'Lisa Viewer',
-    email: 'lisa.view@datacenter.local',
-    role: 'Viewer',
-    lastLogin: '2026-02-15 10:22 UTC',
-    status: 'Active'
-  },
-  {
-    id: 5,
-    name: 'Robert Inactive',
-    email: 'robert.inactive@datacenter.local',
-    role: 'Operator',
-    lastLogin: '2025-12-01 16:00 UTC',
-    status: 'Inactive'
+import { ref, onMounted } from 'vue'
+import { usersApi, type User } from '../../services/api'
+
+const users = ref<User[]>([])
+const loading = ref(true)
+const showModal = ref(false)
+const editing = ref<User | null>(null)
+const saving = ref(false)
+
+const defaultForm = { name: '', email: '', role: 'Operator', status: 'Active' }
+const form = ref({ ...defaultForm })
+
+async function loadData() {
+  users.value = await usersApi.getAll()
+}
+
+onMounted(async () => {
+  try {
+    await loadData()
+  } finally {
+    loading.value = false
   }
-];
+})
+
+function openCreate() {
+  editing.value = null
+  form.value = { ...defaultForm }
+  showModal.value = true
+}
+
+function openEdit(user: User) {
+  editing.value = user
+  form.value = { name: user.name, email: user.email, role: user.role, status: user.status }
+  showModal.value = true
+}
+
+async function save() {
+  saving.value = true
+  try {
+    if (editing.value) {
+      await usersApi.update(editing.value.id, form.value)
+    } else {
+      await usersApi.create(form.value)
+    }
+    showModal.value = false
+    await loadData()
+  } finally {
+    saving.value = false
+  }
+}
+
+async function remove(id: number) {
+  if (!confirm('Are you sure you want to delete this user?')) return
+  await usersApi.remove(id)
+  await loadData()
+}
 </script>
