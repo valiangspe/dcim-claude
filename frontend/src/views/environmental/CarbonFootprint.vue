@@ -11,9 +11,8 @@
         <div class="card">
           <div class="card-body">
             <h5 class="card-title">Total CO2e Emissions</h5>
-            <div class="display-4 text-danger">142</div>
+            <div class="display-4 text-danger">{{ totalEmissions.toFixed(0) }}</div>
             <p class="text-muted">Tonnes per year</p>
-            <small class="text-success">↓ 12% vs last year</small>
           </div>
         </div>
       </div>
@@ -21,35 +20,44 @@
         <div class="card">
           <div class="card-body">
             <h5 class="card-title">Monthly Average</h5>
-            <div class="display-4 text-info">11.8</div>
+            <div class="display-4 text-info">{{ monthlyAverage.toFixed(1) }}</div>
             <p class="text-muted">Tonnes per month</p>
-            <small class="text-warning">Trending stable</small>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Monthly Breakdown Table -->
+    <!-- Metrics Table with CRUD -->
     <div class="card mb-4">
-      <div class="card-header">
-        <h5 class="mb-0">Monthly Breakdown</h5>
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Environmental Metrics</h5>
+        <button class="btn btn-sm btn-primary" @click="openCreate">+ Add Metric</button>
       </div>
-      <div class="card-body">
-        <table class="table table-striped">
-          <thead>
+      <div class="card-body p-0">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
             <tr>
+              <th>Category</th>
+              <th>Name</th>
+              <th>Value</th>
+              <th>Unit</th>
               <th>Month</th>
-              <th>CO2e (tonnes)</th>
-              <th>Trend</th>
-              <th>Status</th>
+              <th>Year</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="row in monthlyBreakdown" :key="row.month">
-              <td>{{ row.month }}</td>
-              <td>{{ row.value }}</td>
-              <td><span :class="row.trend.class">{{ row.trend.text }}</span></td>
-              <td><span class="badge" :class="row.status.class">{{ row.status.label }}</span></td>
+            <tr v-for="m in metrics" :key="m.id">
+              <td>{{ m.category }}</td>
+              <td class="fw-semibold">{{ m.name }}</td>
+              <td>{{ m.value }}</td>
+              <td>{{ m.unit }}</td>
+              <td>{{ monthNames[m.month - 1] || m.month }}</td>
+              <td>{{ m.year }}</td>
+              <td>
+                <button class="btn btn-sm btn-outline-secondary me-1" @click="openEdit(m)">Edit</button>
+                <button class="btn btn-sm btn-outline-danger" @click="remove(m.id)">Delete</button>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -68,7 +76,7 @@
             <span class="fw-bold">162 tonnes</span>
           </div>
           <div class="progress" style="height: 24px">
-            <div class="progress-bar bg-danger" role="progressbar" style="width: 100%" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100"></div>
+            <div class="progress-bar bg-danger" role="progressbar" style="width: 100%"></div>
           </div>
         </div>
         <div class="mb-3">
@@ -77,7 +85,7 @@
             <span class="fw-bold">152 tonnes</span>
           </div>
           <div class="progress" style="height: 24px">
-            <div class="progress-bar bg-warning" role="progressbar" style="width: 94%" aria-valuenow="94" aria-valuemin="0" aria-valuemax="100"></div>
+            <div class="progress-bar bg-warning" role="progressbar" style="width: 94%"></div>
           </div>
         </div>
         <div>
@@ -86,12 +94,57 @@
             <span class="fw-bold">142 tonnes</span>
           </div>
           <div class="progress" style="height: 24px">
-            <div class="progress-bar bg-success" role="progressbar" style="width: 88%" aria-valuenow="88" aria-valuemin="0" aria-valuemax="100"></div>
+            <div class="progress-bar bg-success" role="progressbar" style="width: 88%"></div>
           </div>
         </div>
       </div>
     </div>
     </template>
+
+    <!-- Modal -->
+    <div v-if="showModal" class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">{{ editing ? 'Edit' : 'Add' }} Metric</h5>
+            <button type="button" class="btn-close" @click="showModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">Category</label>
+              <input v-model="form.category" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Name</label>
+              <input v-model="form.name" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Value</label>
+              <input v-model.number="form.value" type="number" step="0.1" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Unit</label>
+              <input v-model="form.unit" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Month</label>
+              <input v-model.number="form.month" type="number" min="1" max="12" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Year</label>
+              <input v-model.number="form.year" type="number" class="form-control" />
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showModal = false">Cancel</button>
+            <button class="btn btn-primary" @click="save" :disabled="saving">
+              <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -102,34 +155,64 @@ import { environmentalMetricsApi, type EnvironmentalMetric } from '../../service
 const metrics = ref<EnvironmentalMetric[]>([])
 const loading = ref(true)
 const error = ref('')
+const showModal = ref(false)
+const saving = ref(false)
+const editing = ref<EnvironmentalMetric | null>(null)
+
+const defaultForm = { category: 'carbon', name: '', value: 0, unit: 'tonnes', month: 1, year: 2025 }
+const form = ref({ ...defaultForm })
 
 const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
-const monthlyBreakdown = computed(() => {
-  const co2Metrics = metrics.value.filter(m => m.unit === 'tonnes' || m.category === 'carbon')
-  return co2Metrics.map(m => {
-    const trend = m.value <= 11.5 ? { text: '↓ good', class: 'text-success' } : { text: '↑', class: 'text-danger' }
-    const status = m.value <= 11.0 ? { label: 'Good', class: 'bg-success' }
-      : m.value <= 12.0 ? { label: 'On Track', class: 'bg-info' }
-      : { label: 'Above Avg', class: 'bg-warning' }
-    return {
-      month: monthNames[m.month - 1] || `Month ${m.month}`,
-      value: m.value,
-      trend,
-      status,
-    }
-  })
+const totalEmissions = computed(() => metrics.value.reduce((a, m) => a + m.value, 0))
+const monthlyAverage = computed(() => {
+  const count = metrics.value.length
+  return count > 0 ? totalEmissions.value / count : 0
 })
+
+async function loadData() {
+  metrics.value = await environmentalMetricsApi.getAll()
+}
 
 onMounted(async () => {
   try {
-    metrics.value = await environmentalMetricsApi.getAll()
+    await loadData()
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : 'Failed to load metrics'
   } finally {
     loading.value = false
   }
 })
+
+function openCreate() {
+  editing.value = null
+  form.value = { ...defaultForm }
+  showModal.value = true
+}
+
+function openEdit(metric: EnvironmentalMetric) {
+  editing.value = metric
+  form.value = { category: metric.category, name: metric.name, value: metric.value, unit: metric.unit, month: metric.month, year: metric.year }
+  showModal.value = true
+}
+
+async function save() {
+  saving.value = true
+  try {
+    if (editing.value) await environmentalMetricsApi.update(editing.value.id, form.value)
+    else await environmentalMetricsApi.create(form.value)
+    showModal.value = false
+    await loadData()
+  } finally {
+    saving.value = false
+  }
+}
+
+async function remove(id: number) {
+  if (!confirm('Are you sure?')) return
+  await environmentalMetricsApi.remove(id)
+  await loadData()
+}
 </script>
 
 <style scoped>

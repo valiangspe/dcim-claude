@@ -70,6 +70,12 @@ async function save() {
     saving.value = false
   }
 }
+
+async function remove(id: number) {
+  if (!confirm('Are you sure?')) return
+  await securityIncidentsApi.remove(id)
+  await loadData()
+}
 </script>
 
 <template>
@@ -121,7 +127,8 @@ async function save() {
               <td><span class="badge" :class="`bg-${severityColor[incident.severity as keyof typeof severityColor]}`">{{ incident.severity }}</span></td>
               <td><span class="badge" :class="`bg-${statusBadge[incident.status as keyof typeof statusBadge]}`">{{ incident.status }}</span></td>
               <td>
-                <button class="btn btn-sm btn-outline-primary" @click="openEdit(incident)">Edit</button>
+                <button class="btn btn-sm btn-outline-primary me-1" @click="openEdit(incident)">Edit</button>
+                <button class="btn btn-sm btn-outline-danger" @click="remove(incident.id)">Delete</button>
               </td>
             </tr>
           </tbody>

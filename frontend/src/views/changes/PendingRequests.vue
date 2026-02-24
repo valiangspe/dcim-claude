@@ -18,6 +18,7 @@
                 <th>Priority</th>
                 <th>Status</th>
                 <th>Requested Date</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -36,6 +37,10 @@
                   </span>
                 </td>
                 <td>{{ req.requestedDate }}</td>
+                <td>
+                  <button class="btn btn-sm btn-outline-secondary me-1" @click="openEdit(req)">Edit</button>
+                  <button class="btn btn-sm btn-outline-danger" @click="remove(req.id)">Delete</button>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -51,7 +56,7 @@
       <div class="modal-dialog">
         <div class="modal-content">
           <div class="modal-header">
-            <h5 class="modal-title">New Request</h5>
+            <h5 class="modal-title">{{ editing ? 'Edit' : 'New' }} Request</h5>
             <button type="button" class="btn-close" @click="showModal = false"></button>
           </div>
           <div class="modal-body">
@@ -116,6 +121,7 @@ const pendingRequests = ref<ChangeRequest[]>([])
 const loading = ref(true)
 const showModal = ref(false)
 const saving = ref(false)
+const editing = ref<ChangeRequest | null>(null)
 
 const defaultForm = { requestId: '', requester: '', type: 'Hardware', priority: 'Medium', status: 'Pending Review', requestedDate: '' }
 const form = ref({ ...defaultForm })
@@ -133,19 +139,33 @@ onMounted(async () => {
 })
 
 function openCreate() {
+  editing.value = null
   form.value = { ...defaultForm }
+  showModal.value = true
+}
+
+function openEdit(req: ChangeRequest) {
+  editing.value = req
+  form.value = { requestId: req.requestId, requester: req.requester, type: req.type, priority: req.priority, status: req.status, requestedDate: req.requestedDate }
   showModal.value = true
 }
 
 async function save() {
   saving.value = true
   try {
-    await changeRequestsApi.create(form.value)
+    if (editing.value) await changeRequestsApi.update(editing.value.id, form.value)
+    else await changeRequestsApi.create(form.value)
     showModal.value = false
     await loadData()
   } finally {
     saving.value = false
   }
+}
+
+async function remove(id: number) {
+  if (!confirm('Are you sure?')) return
+  await changeRequestsApi.remove(id)
+  await loadData()
 }
 
 const getPriorityBadgeClass = (priority: string): string => {

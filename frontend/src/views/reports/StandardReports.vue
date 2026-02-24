@@ -25,6 +25,7 @@
                   <button class="btn btn-sm btn-primary flex-grow-1">Generate Now</button>
                   <button class="btn btn-sm btn-outline-secondary">View History</button>
                   <button class="btn btn-sm btn-outline-primary" @click="openEdit(report)">Edit</button>
+                  <button class="btn btn-sm btn-outline-danger" @click="remove(report.id)">Delete</button>
                 </div>
               </div>
             </div>
@@ -124,6 +125,12 @@ async function save() {
   } finally {
     saving.value = false
   }
+}
+
+async function remove(id: number) {
+  if (!confirm('Are you sure?')) return
+  await reportsApi.remove(id)
+  await loadData()
 }
 </script>
 
