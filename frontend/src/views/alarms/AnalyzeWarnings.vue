@@ -2,6 +2,9 @@
   <div class="container-fluid">
     <h1 class="mb-4">Warning Analysis & Patterns</h1>
 
+    <div v-if="loading" class="text-center py-5"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>
+    <template v-else>
+
     <!-- Analysis Summary Cards -->
     <div class="row mb-4">
       <div class="col-md-3">
@@ -9,7 +12,7 @@
           <div class="card-body">
             <h6 class="card-title">Total Warnings (7d)</h6>
             <p class="h4 mb-0">234</p>
-            <small class="text-muted">↑ 12% from previous week</small>
+            <small class="text-muted">Up 12% from previous week</small>
           </div>
         </div>
       </div>
@@ -36,7 +39,7 @@
           <div class="card-body">
             <h6 class="card-title">Avg Resolution Time</h6>
             <p class="h4 mb-0">2.3h</p>
-            <small class="text-muted">↓ 8% improvement</small>
+            <small class="text-muted">Down 8% improvement</small>
           </div>
         </div>
       </div>
@@ -46,8 +49,9 @@
     <div class="row mb-4">
       <div class="col-lg-8">
         <div class="card">
-          <div class="card-header">
+          <div class="card-header d-flex justify-content-between align-items-center">
             <h5 class="mb-0">Top Warning Patterns (7 days)</h5>
+            <button class="btn btn-sm btn-primary" @click="openCreate">+ Add Pattern</button>
           </div>
           <div class="table-responsive">
             <table class="table table-sm mb-0">
@@ -57,6 +61,7 @@
                   <th>Frequency</th>
                   <th>Last Occurrence</th>
                   <th>Trend</th>
+                  <th style="width:120px">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -70,6 +75,10 @@
                     <span :class="getTrendBadgeClass(pattern.trend)">
                       {{ pattern.trend }}
                     </span>
+                  </td>
+                  <td>
+                    <button class="btn btn-sm btn-outline-primary me-1" @click="openEdit(pattern)">Edit</button>
+                    <button class="btn btn-sm btn-outline-danger" @click="remove(pattern.id)">Delete</button>
                   </td>
                 </tr>
               </tbody>
@@ -127,17 +136,54 @@
         </div>
       </div>
     </div>
+    </template>
+
+    <!-- Modal -->
+    <div v-if="showModal" class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">{{ editing ? 'Edit' : 'Add' }} Warning Pattern</h5>
+            <button type="button" class="btn-close" @click="showModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">Name</label>
+              <input v-model="form.name" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Frequency</label>
+              <input v-model="form.frequency" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Last Occurrence</label>
+              <input v-model="form.lastOccurrence" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Trend</label>
+              <select v-model="form.trend" class="form-select">
+                <option value="Increasing">Increasing</option>
+                <option value="Stable">Stable</option>
+                <option value="Decreasing">Decreasing</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showModal = false">Cancel</button>
+            <button class="btn btn-primary" @click="save" :disabled="saving">
+              <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-interface WarningPattern {
-  id: number
-  name: string
-  frequency: string
-  lastOccurrence: Date
-  trend: 'Increasing' | 'Stable' | 'Decreasing'
-}
+import { ref, onMounted } from 'vue'
+import { warningPatternsApi, type WarningPattern } from '../../services/api'
 
 interface WarningDistribution {
   type: string
@@ -152,43 +198,50 @@ interface Recommendation {
   impact?: string
 }
 
-const warningPatterns: WarningPattern[] = [
-  {
-    id: 1,
-    name: 'Temperature spikes in Rack A',
-    frequency: '18 times',
-    lastOccurrence: new Date(Date.now() - 2 * 60 * 60 * 1000),
-    trend: 'Increasing',
-  },
-  {
-    id: 2,
-    name: 'PDU power anomalies',
-    frequency: '12 times',
-    lastOccurrence: new Date(Date.now() - 4 * 60 * 60 * 1000),
-    trend: 'Stable',
-  },
-  {
-    id: 3,
-    name: 'Network bandwidth spikes',
-    frequency: '15 times',
-    lastOccurrence: new Date(Date.now() - 6 * 60 * 60 * 1000),
-    trend: 'Decreasing',
-  },
-  {
-    id: 4,
-    name: 'Cooling system pressure warnings',
-    frequency: '8 times',
-    lastOccurrence: new Date(Date.now() - 8 * 60 * 60 * 1000),
-    trend: 'Increasing',
-  },
-  {
-    id: 5,
-    name: 'UPS battery health degradation',
-    frequency: '6 times',
-    lastOccurrence: new Date(Date.now() - 24 * 60 * 60 * 1000),
-    trend: 'Stable',
-  },
-]
+const warningPatterns = ref<WarningPattern[]>([])
+const loading = ref(true)
+
+const showModal = ref(false)
+const saving = ref(false)
+const editing = ref<WarningPattern | null>(null)
+const defaultForm = { name: '', frequency: '', lastOccurrence: '', trend: 'Stable' }
+const form = ref({ ...defaultForm })
+
+async function loadData() {
+  warningPatterns.value = await warningPatternsApi.getAll()
+}
+
+onMounted(async () => { try { await loadData() } finally { loading.value = false } })
+
+function openCreate() {
+  editing.value = null
+  form.value = { ...defaultForm }
+  showModal.value = true
+}
+
+function openEdit(pattern: WarningPattern) {
+  editing.value = pattern
+  form.value = { name: pattern.name, frequency: pattern.frequency, lastOccurrence: pattern.lastOccurrence, trend: pattern.trend }
+  showModal.value = true
+}
+
+async function save() {
+  saving.value = true
+  try {
+    if (editing.value) await warningPatternsApi.update(editing.value.id, form.value)
+    else await warningPatternsApi.create(form.value)
+    showModal.value = false
+    await loadData()
+  } finally {
+    saving.value = false
+  }
+}
+
+async function remove(id: number) {
+  if (!confirm('Are you sure?')) return
+  await warningPatternsApi.remove(id)
+  await loadData()
+}
 
 const warningDistribution: WarningDistribution[] = [
   { type: 'Temperature', count: 85, percentage: 36 },
@@ -236,14 +289,15 @@ const recommendations: Recommendation[] = [
   },
 ]
 
-function formatTime(date: Date): string {
+function formatTime(date: string | Date): string {
+  const d = typeof date === 'string' ? new Date(date) : date
   const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
+  const diffMs = now.getTime() - d.getTime()
   const diffHours = Math.floor(diffMs / (60 * 60 * 1000))
 
   if (diffHours < 1) return 'Now'
   if (diffHours < 24) return `${diffHours}h ago`
-  return date.toLocaleDateString()
+  return d.toLocaleDateString()
 }
 
 function getTrendBadgeClass(trend: string): string {

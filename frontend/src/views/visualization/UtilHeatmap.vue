@@ -1,6 +1,9 @@
 <template>
   <div class="container-fluid py-4">
-    <h1 class="h3 mb-4">Utilization Heatmap</h1>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h1 class="h3 mb-0">Utilization Heatmap</h1>
+      <button class="btn btn-primary btn-sm" @click="openCreate">+ Add Data Point</button>
+    </div>
 
     <div class="row mb-3">
       <div class="col-auto">
@@ -20,6 +23,12 @@
       </div>
     </div>
 
+    <div v-if="loading" class="text-center py-5">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+    </div>
+    <template v-else>
     <div class="card">
       <div class="card-body">
         <div class="table-responsive">
@@ -35,9 +44,9 @@
             <tbody>
               <tr v-for="server in servers" :key="server">
                 <td class="fw-medium">{{ server }}</td>
-                <td v-for="(util, idx) in getUtilizationData(server)" :key="idx"
-                    :style="{ backgroundColor: getUtilColor(util), color: 'white', textAlign: 'center', padding: '8px 0', fontWeight: 'bold' }">
-                  {{ util }}%
+                <td v-for="col in timeSlots" :key="col"
+                    :style="{ backgroundColor: getUtilColor(getCell(server, col)), color: 'white', textAlign: 'center', padding: '8px 0', fontWeight: 'bold' }">
+                  {{ getCell(server, col) }}%
                 </td>
               </tr>
             </tbody>
@@ -58,34 +67,111 @@
         </div>
       </div>
     </div>
+
+    <div class="card mt-4">
+      <div class="card-header fw-semibold">Heatmap Data</div>
+      <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+          <thead class="table-light">
+            <tr><th>Category</th><th>Row Label</th><th>Col Label</th><th class="text-end">Value</th><th>Display Value</th><th>Actions</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in utilData" :key="item.id">
+              <td>{{ item.category }}</td>
+              <td class="fw-medium">{{ item.rowLabel }}</td>
+              <td>{{ item.colLabel }}</td>
+              <td class="text-end">{{ item.value }}</td>
+              <td>{{ item.displayValue }}</td>
+              <td>
+                <button class="btn btn-sm btn-outline-secondary me-1" @click="openEdit(item)">Edit</button>
+                <button class="btn btn-sm btn-outline-danger" @click="remove(item.id)">Delete</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    </template>
+
+    <!-- Modal -->
+    <div v-if="showModal" class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">{{ editing ? 'Edit' : 'Add' }} Heatmap Data</h5>
+            <button type="button" class="btn-close" @click="showModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3"><label class="form-label">Category</label><input v-model="form.category" type="text" class="form-control" /></div>
+            <div class="mb-3"><label class="form-label">Row Label</label><input v-model="form.rowLabel" type="text" class="form-control" /></div>
+            <div class="mb-3"><label class="form-label">Col Label</label><input v-model="form.colLabel" type="text" class="form-control" /></div>
+            <div class="mb-3"><label class="form-label">Value</label><input v-model.number="form.value" type="number" class="form-control" /></div>
+            <div class="mb-3"><label class="form-label">Display Value</label><input v-model="form.displayValue" type="text" class="form-control" /></div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showModal = false">Cancel</button>
+            <button class="btn btn-primary" @click="save" :disabled="saving">
+              <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed, onMounted } from 'vue'
+import { heatmapDataApi, type HeatmapData } from '../../services/api'
 
-const selectedMetric = ref('cpu');
-const selectedTimeRange = ref('day');
+const selectedMetric = ref('cpu')
+const selectedTimeRange = ref('day')
+const allData = ref<HeatmapData[]>([])
+const loading = ref(true)
+const showModal = ref(false)
+const editing = ref<HeatmapData | null>(null)
+const saving = ref(false)
 
-const servers = [
-  'SRV-WEB-01', 'SRV-WEB-02', 'SRV-APP-01', 'SRV-APP-02',
-  'SRV-DB-01', 'SRV-DB-02', 'SRV-CACHE-01'
-];
+const defaultForm = { category: 'utilization', rowLabel: '', colLabel: '', value: 0, displayValue: '' }
+const form = ref({ ...defaultForm })
 
-const timeSlots = ['00:00', '06:00', '12:00', '18:00', '24:00'];
+async function loadData() {
+  allData.value = await heatmapDataApi.getAll()
+}
 
-const utilData: Record<string, number[]> = {
-  'SRV-WEB-01': [45, 52, 68, 55, 48],
-  'SRV-WEB-02': [42, 48, 65, 52, 45],
-  'SRV-APP-01': [65, 72, 85, 78, 68],
-  'SRV-APP-02': [62, 68, 82, 75, 65],
-  'SRV-DB-01': [78, 82, 92, 88, 80],
-  'SRV-DB-02': [75, 80, 89, 85, 78],
-  'SRV-CACHE-01': [35, 42, 55, 48, 38]
-};
+onMounted(async () => {
+  try {
+    await loadData()
+  } finally {
+    loading.value = false
+  }
+})
 
-function getUtilizationData(server: string): number[] {
-  return utilData[server] || [0, 0, 0, 0, 0];
+const utilData = computed(() => allData.value.filter(d => d.category === 'utilization'))
+
+const servers = computed(() => {
+  const set = new Set<string>()
+  utilData.value.forEach(d => set.add(d.rowLabel))
+  return Array.from(set).sort()
+})
+
+const timeSlots = computed(() => {
+  const set = new Set<string>()
+  utilData.value.forEach(d => set.add(d.colLabel))
+  return Array.from(set).sort()
+})
+
+const dataMap = computed(() => {
+  const map: Record<string, Record<string, number>> = {}
+  utilData.value.forEach(d => {
+    if (!map[d.rowLabel]) map[d.rowLabel] = {}
+    map[d.rowLabel][d.colLabel] = d.value
+  })
+  return map
+})
+
+function getCell(server: string, col: string): number {
+  return dataMap.value[server]?.[col] || 0
 }
 
 function getUtilColor(util: number): string {
@@ -93,5 +179,38 @@ function getUtilColor(util: number): string {
   if (util < 75) return 'rgb(255, 200, 0)';
   if (util < 90) return 'rgb(255, 100, 0)';
   return 'rgb(255, 0, 0)';
+}
+
+function openCreate() {
+  editing.value = null
+  form.value = { ...defaultForm }
+  showModal.value = true
+}
+
+function openEdit(item: HeatmapData) {
+  editing.value = item
+  form.value = { category: item.category, rowLabel: item.rowLabel, colLabel: item.colLabel, value: item.value, displayValue: item.displayValue }
+  showModal.value = true
+}
+
+async function save() {
+  saving.value = true
+  try {
+    if (editing.value) {
+      await heatmapDataApi.update(editing.value.id, form.value)
+    } else {
+      await heatmapDataApi.create(form.value)
+    }
+    showModal.value = false
+    await loadData()
+  } finally {
+    saving.value = false
+  }
+}
+
+async function remove(id: number) {
+  if (!confirm('Are you sure you want to delete this data point?')) return
+  await heatmapDataApi.remove(id)
+  await loadData()
 }
 </script>

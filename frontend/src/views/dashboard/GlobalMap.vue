@@ -2,18 +2,19 @@
 import { onMounted, onBeforeUnmount, ref } from 'vue'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import { sitesApi, type Site } from '../../services/api'
 
 const mapContainer = ref<HTMLDivElement>()
 let map: L.Map | null = null
 
-const sites = [
-  { name: 'DC-East-01', location: 'Virginia, US', lat: 38.95, lng: -77.45, status: 'operational', power: 1240, pue: 1.32, racks: 86, alarms: 2 },
-  { name: 'DC-West-01', location: 'Oregon, US', lat: 45.59, lng: -121.18, status: 'operational', power: 980, pue: 1.28, racks: 62, alarms: 0 },
-  { name: 'DC-EU-01', location: 'Frankfurt, DE', lat: 50.11, lng: 8.68, status: 'operational', power: 627, pue: 1.45, racks: 38, alarms: 5 },
-  { name: 'DC-APAC-01', location: 'Singapore, SG', lat: 1.35, lng: 103.82, status: 'maintenance', power: 0, pue: 0, racks: 24, alarms: 1 },
-  { name: 'DC-EU-02', location: 'Amsterdam, NL', lat: 52.37, lng: 4.90, status: 'operational', power: 412, pue: 1.35, racks: 28, alarms: 3 },
-  { name: 'DC-South-01', location: 'Sao Paulo, BR', lat: -23.55, lng: -46.63, status: 'degraded', power: 215, pue: 1.52, racks: 16, alarms: 8 },
-]
+const sites = ref<Site[]>([])
+const loading = ref(true)
+const showModal = ref(false)
+const saving = ref(false)
+const editing = ref<Site | null>(null)
+
+const defaultForm = { name: '', location: '', lat: 0, lng: 0, status: 'operational', power: 0, pue: 0, racks: 0, alarms: 0 }
+const form = ref({ ...defaultForm })
 
 function statusBadge(status: string): string {
   switch (status) {
@@ -48,7 +49,7 @@ function createIcon(status: string) {
   })
 }
 
-onMounted(() => {
+function initMap() {
   if (!mapContainer.value) return
 
   map = L.map(mapContainer.value).setView([20, 0], 2)
@@ -58,7 +59,7 @@ onMounted(() => {
     maxZoom: 18,
   }).addTo(map)
 
-  for (const site of sites) {
+  for (const site of sites.value) {
     const popup = `
       <strong>${site.name}</strong><br>
       ${site.location}<br>
@@ -71,58 +72,179 @@ onMounted(() => {
       .addTo(map!)
       .bindPopup(popup)
   }
+}
+
+async function loadData() {
+  sites.value = await sitesApi.getAll()
+}
+
+onMounted(async () => {
+  try {
+    await loadData()
+  } finally {
+    loading.value = false
+  }
+  initMap()
 })
 
 onBeforeUnmount(() => {
   map?.remove()
   map = null
 })
+
+function openCreate() {
+  editing.value = null
+  form.value = { ...defaultForm }
+  showModal.value = true
+}
+
+function openEdit(item: Site) {
+  editing.value = item
+  form.value = { name: item.name, location: item.location, lat: item.lat, lng: item.lng, status: item.status, power: item.power, pue: item.pue, racks: item.racks, alarms: item.alarms }
+  showModal.value = true
+}
+
+async function save() {
+  saving.value = true
+  try {
+    if (editing.value) {
+      await sitesApi.update(editing.value.id, form.value)
+    } else {
+      await sitesApi.create(form.value)
+    }
+    showModal.value = false
+    await loadData()
+  } finally {
+    saving.value = false
+  }
+}
+
+async function remove(id: number) {
+  if (!confirm('Are you sure?')) return
+  await sitesApi.remove(id)
+  await loadData()
+}
 </script>
 
 <template>
   <div>
     <h4 class="mb-4">Global Map</h4>
 
-    <!-- Map -->
-    <div class="card border-0 shadow-sm mb-4">
-      <div ref="mapContainer" style="height: 420px; z-index: 0;"></div>
-    </div>
-
-    <!-- Sites Table -->
-    <div class="card border-0 shadow-sm">
-      <div class="card-header bg-transparent fw-semibold d-flex justify-content-between">
-        <span>All Sites</span>
-        <span class="badge bg-dark">{{ sites.length }} sites</span>
+    <div v-if="loading" class="text-center py-5"><div class="spinner-border"></div></div>
+    <template v-else>
+      <!-- Map -->
+      <div class="card border-0 shadow-sm mb-4">
+        <div ref="mapContainer" style="height: 420px; z-index: 0;"></div>
       </div>
-      <div class="card-body p-0">
-        <div class="table-responsive">
-          <table class="table table-hover align-middle mb-0">
-            <thead class="table-light">
-              <tr>
-                <th>Site</th>
-                <th>Location</th>
-                <th>Status</th>
-                <th class="text-end">Power (kW)</th>
-                <th class="text-end">PUE</th>
-                <th class="text-end">Racks</th>
-                <th class="text-end">Alarms</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="site in sites" :key="site.name">
-                <td class="fw-semibold">{{ site.name }}</td>
-                <td class="text-muted">{{ site.location }}</td>
-                <td><span class="badge" :class="statusBadge(site.status)">{{ site.status }}</span></td>
-                <td class="text-end">{{ site.power > 0 ? site.power.toLocaleString() : '---' }}</td>
-                <td class="text-end">{{ site.pue > 0 ? site.pue.toFixed(2) : '---' }}</td>
-                <td class="text-end">{{ site.racks }}</td>
-                <td class="text-end">
-                  <span v-if="site.alarms > 0" class="badge bg-danger">{{ site.alarms }}</span>
-                  <span v-else class="text-success">0</span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+
+      <!-- Sites Table -->
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-transparent fw-semibold d-flex justify-content-between align-items-center">
+          <span>All Sites ({{ sites.length }})</span>
+          <button class="btn btn-primary btn-sm" @click="openCreate">+ Add</button>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Site</th>
+                  <th>Location</th>
+                  <th>Status</th>
+                  <th class="text-end">Power (kW)</th>
+                  <th class="text-end">PUE</th>
+                  <th class="text-end">Racks</th>
+                  <th class="text-end">Alarms</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="site in sites" :key="site.id">
+                  <td class="fw-semibold">{{ site.name }}</td>
+                  <td class="text-muted">{{ site.location }}</td>
+                  <td><span class="badge" :class="statusBadge(site.status)">{{ site.status }}</span></td>
+                  <td class="text-end">{{ site.power > 0 ? site.power.toLocaleString() : '---' }}</td>
+                  <td class="text-end">{{ site.pue > 0 ? site.pue.toFixed(2) : '---' }}</td>
+                  <td class="text-end">{{ site.racks }}</td>
+                  <td class="text-end">
+                    <span v-if="site.alarms > 0" class="badge bg-danger">{{ site.alarms }}</span>
+                    <span v-else class="text-success">0</span>
+                  </td>
+                  <td>
+                    <button class="btn btn-sm btn-outline-secondary me-1" @click="openEdit(site)">Edit</button>
+                    <button class="btn btn-sm btn-outline-danger" @click="remove(site.id)">Delete</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <div v-if="showModal" class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">{{ editing ? 'Edit' : 'Add' }} Site</h5>
+            <button type="button" class="btn-close" @click="showModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">Name</label>
+              <input v-model="form.name" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Location</label>
+              <input v-model="form.location" type="text" class="form-control" />
+            </div>
+            <div class="row mb-3">
+              <div class="col">
+                <label class="form-label">Latitude</label>
+                <input v-model.number="form.lat" type="number" step="0.0001" class="form-control" />
+              </div>
+              <div class="col">
+                <label class="form-label">Longitude</label>
+                <input v-model.number="form.lng" type="number" step="0.0001" class="form-control" />
+              </div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Status</label>
+              <select v-model="form.status" class="form-select">
+                <option>operational</option>
+                <option>degraded</option>
+                <option>maintenance</option>
+                <option>offline</option>
+              </select>
+            </div>
+            <div class="row mb-3">
+              <div class="col">
+                <label class="form-label">Power (kW)</label>
+                <input v-model.number="form.power" type="number" class="form-control" />
+              </div>
+              <div class="col">
+                <label class="form-label">PUE</label>
+                <input v-model.number="form.pue" type="number" step="0.01" class="form-control" />
+              </div>
+            </div>
+            <div class="row mb-3">
+              <div class="col">
+                <label class="form-label">Racks</label>
+                <input v-model.number="form.racks" type="number" class="form-control" />
+              </div>
+              <div class="col">
+                <label class="form-label">Alarms</label>
+                <input v-model.number="form.alarms" type="number" class="form-control" />
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showModal = false">Cancel</button>
+            <button class="btn btn-primary" @click="save" :disabled="saving">
+              <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>
+              Save
+            </button>
+          </div>
         </div>
       </div>
     </div>

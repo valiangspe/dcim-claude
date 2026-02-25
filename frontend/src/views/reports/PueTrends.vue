@@ -1,8 +1,15 @@
 <template>
   <div class="pue-trends">
+    <div v-if="loading" class="text-center py-5">
+      <div class="spinner-border text-info" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+    </div>
+    <template v-else>
     <div class="card">
-      <div class="card-header bg-info text-white">
+      <div class="card-header bg-info text-white d-flex align-items-center justify-content-between">
         <h5 class="mb-0">PUE Trends - Monthly Analysis</h5>
+        <button class="btn btn-sm btn-light" @click="openCreate">+ Add</button>
       </div>
       <div class="card-body">
         <div class="table-responsive">
@@ -14,10 +21,11 @@
                 <th>Trend</th>
                 <th>Progress</th>
                 <th>Status</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="trend in pueTrends" :key="trend.month">
+              <tr v-for="trend in pueTrends" :key="trend.id">
                 <td><strong>{{ trend.month }}</strong></td>
                 <td>{{ trend.pueValue }}</td>
                 <td>
@@ -41,37 +49,126 @@
                     {{ trend.status }}
                   </span>
                 </td>
+                <td>
+                  <button class="btn btn-sm btn-outline-primary me-1" @click="openEdit(trend)">Edit</button>
+                  <button class="btn btn-sm btn-outline-danger" @click="remove(trend.id)">Delete</button>
+                </td>
               </tr>
             </tbody>
           </table>
         </div>
       </div>
       <div class="card-footer text-muted">
-        Target PUE: 1.5 | Current: {{ pueTrends[0].pueValue }}
+        Target PUE: 1.5 | Current: {{ pueTrends.length > 0 ? pueTrends[0].pueValue : 'N/A' }}
+      </div>
+    </div>
+    </template>
+
+    <!-- Modal -->
+    <div v-if="showModal" class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">{{ editing ? 'Edit' : 'Add' }} PUE Trend</h5>
+            <button type="button" class="btn-close" @click="showModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">Month</label>
+              <input v-model="form.month" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">PUE Value</label>
+              <input v-model.number="form.pueValue" type="number" step="0.01" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Trend</label>
+              <select v-model="form.trend" class="form-select">
+                <option value="Down">Down</option>
+                <option value="Up">Up</option>
+                <option value="Stable">Stable</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Progress Percent</label>
+              <input v-model.number="form.progressPercent" type="number" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Status</label>
+              <select v-model="form.status" class="form-select">
+                <option value="On Track">On Track</option>
+                <option value="Good">Good</option>
+                <option value="Fair">Fair</option>
+                <option value="Poor">Poor</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showModal = false">Cancel</button>
+            <button class="btn btn-primary" @click="save" :disabled="saving">
+              <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>
+              Save
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-interface PueTrend {
-  month: string
-  pueValue: number
-  trend: string
-  progressPercent: number
-  status: string
+import { ref, onMounted } from 'vue'
+import { pueTrendsApi, type PueTrend } from '../../services/api'
+
+const pueTrends = ref<PueTrend[]>([])
+const loading = ref(true)
+const showModal = ref(false)
+const saving = ref(false)
+const editing = ref<PueTrend | null>(null)
+const defaultForm = { month: '', pueValue: 1.5, trend: 'Stable', progressPercent: 0, status: 'On Track' }
+const form = ref({ ...defaultForm })
+
+function openCreate() {
+  editing.value = null
+  form.value = { ...defaultForm }
+  showModal.value = true
 }
 
-const pueTrends: PueTrend[] = [
-  { month: 'February 2026', pueValue: 1.62, trend: 'Down', progressPercent: 92, status: 'On Track' },
-  { month: 'January 2026', pueValue: 1.68, trend: 'Down', progressPercent: 89, status: 'Good' },
-  { month: 'December 2025', pueValue: 1.75, trend: 'Up', progressPercent: 85, status: 'Fair' },
-  { month: 'November 2025', pueValue: 1.72, trend: 'Down', progressPercent: 86, status: 'Fair' },
-  { month: 'October 2025', pueValue: 1.81, trend: 'Up', progressPercent: 82, status: 'Poor' },
-  { month: 'September 2025', pueValue: 1.78, trend: 'Down', progressPercent: 84, status: 'Fair' },
-  { month: 'August 2025', pueValue: 1.85, trend: 'Up', progressPercent: 80, status: 'Poor' },
-  { month: 'July 2025', pueValue: 1.82, trend: 'Up', progressPercent: 81, status: 'Poor' }
-]
+function openEdit(item: PueTrend) {
+  editing.value = item
+  form.value = { month: item.month, pueValue: item.pueValue, trend: item.trend, progressPercent: item.progressPercent, status: item.status }
+  showModal.value = true
+}
+
+async function save() {
+  saving.value = true
+  try {
+    if (editing.value) await pueTrendsApi.update(editing.value.id, form.value)
+    else await pueTrendsApi.create(form.value)
+    showModal.value = false
+    await loadData()
+  } finally {
+    saving.value = false
+  }
+}
+
+async function remove(id: number) {
+  if (!confirm('Are you sure?')) return
+  await pueTrendsApi.remove(id)
+  await loadData()
+}
+
+async function loadData() {
+  pueTrends.value = await pueTrendsApi.getAll()
+}
+
+onMounted(async () => {
+  try {
+    await loadData()
+  } finally {
+    loading.value = false
+  }
+})
 
 const getTrendBadgeClass = (trend: string): string => {
   const classes = 'badge'

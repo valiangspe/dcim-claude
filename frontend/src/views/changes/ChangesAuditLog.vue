@@ -1,8 +1,14 @@
 <template>
   <div class="audit-log">
-    <div class="card">
-      <div class="card-header bg-secondary text-white">
+    <div v-if="loading" class="text-center py-5">
+      <div class="spinner-border" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+    </div>
+    <div v-else class="card">
+      <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
         <h5 class="mb-0">Change Audit Log</h5>
+        <button class="btn btn-sm btn-light" @click="openCreate">+ Add</button>
       </div>
       <div class="card-body">
         <div class="table-responsive">
@@ -15,11 +21,12 @@
                 <th>User</th>
                 <th>Timestamp</th>
                 <th>Details</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="log in auditLogs" :key="log.id">
-                <td><small>{{ log.id }}</small></td>
+                <td><small>{{ log.auditId }}</small></td>
                 <td><strong>{{ log.changeRequest }}</strong></td>
                 <td>
                   <span :class="getActionBadgeClass(log.action)">
@@ -29,6 +36,10 @@
                 <td>{{ log.user }}</td>
                 <td><small>{{ log.timestamp }}</small></td>
                 <td>{{ log.details }}</td>
+                <td>
+                  <button class="btn btn-sm btn-outline-secondary me-1" @click="openEdit(log)">Edit</button>
+                  <button class="btn btn-sm btn-outline-danger" @click="remove(log.id)">Delete</button>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -38,85 +49,114 @@
         Total audit entries: {{ auditLogs.length }}
       </div>
     </div>
+
+    <div v-if="showModal" class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">{{ editing ? 'Edit' : 'New' }} Audit Entry</h5>
+            <button type="button" class="btn-close" @click="showModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">Audit ID</label>
+              <input v-model="form.auditId" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Change Request</label>
+              <input v-model="form.changeRequest" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Action</label>
+              <select v-model="form.action" class="form-select">
+                <option>Created</option>
+                <option>Updated</option>
+                <option>Approved</option>
+                <option>Rejected</option>
+                <option>Completed</option>
+                <option>Verified</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">User</label>
+              <input v-model="form.user" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Timestamp</label>
+              <input v-model="form.timestamp" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Details</label>
+              <input v-model="form.details" type="text" class="form-control" />
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showModal = false">Cancel</button>
+            <button class="btn btn-primary" @click="save" :disabled="saving">
+              <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-interface AuditLog {
-  id: string
-  changeRequest: string
-  action: string
-  user: string
-  timestamp: string
-  details: string
+import { ref, onMounted } from 'vue'
+import { changeAuditsApi, type ChangeAudit } from '../../services/api'
+
+const auditLogs = ref<ChangeAudit[]>([])
+const loading = ref(true)
+const showModal = ref(false)
+const saving = ref(false)
+const editing = ref<ChangeAudit | null>(null)
+
+const defaultForm = { auditId: '', changeRequest: '', action: 'Created', user: '', timestamp: '', details: '' }
+const form = ref({ ...defaultForm })
+
+async function loadData() {
+  auditLogs.value = await changeAuditsApi.getAll()
 }
 
-const auditLogs: AuditLog[] = [
-  {
-    id: 'LOG-2895',
-    changeRequest: 'CHG-005',
-    action: 'Created',
-    user: 'David Brown',
-    timestamp: '2026-02-14 09:15:00',
-    details: 'Emergency hardware replacement initiated'
-  },
-  {
-    id: 'LOG-2894',
-    changeRequest: 'CHG-005',
-    action: 'Approved',
-    user: 'Manager Admin',
-    timestamp: '2026-02-14 09:45:00',
-    details: 'Expedited approval granted'
-  },
-  {
-    id: 'LOG-2893',
-    changeRequest: 'CHG-004',
-    action: 'Created',
-    user: 'Emma Wilson',
-    timestamp: '2026-02-15 10:30:00',
-    details: 'Access control policy update'
-  },
-  {
-    id: 'LOG-2892',
-    changeRequest: 'CHG-003',
-    action: 'Updated',
-    user: 'Mike Chen',
-    timestamp: '2026-02-16 14:20:00',
-    details: 'Software version changed to v2.1.5'
-  },
-  {
-    id: 'LOG-2891',
-    changeRequest: 'CHG-002',
-    action: 'Approved',
-    user: 'Senior Admin',
-    timestamp: '2026-02-17 11:00:00',
-    details: 'Network routing configuration approved'
-  },
-  {
-    id: 'LOG-2890',
-    changeRequest: 'CHG-001',
-    action: 'Created',
-    user: 'John Smith',
-    timestamp: '2026-02-18 08:45:00',
-    details: 'Server hardware upgrade request'
-  },
-  {
-    id: 'LOG-2889',
-    changeRequest: 'CHG-201',
-    action: 'Completed',
-    user: 'Jessica White',
-    timestamp: '2026-02-12 16:30:00',
-    details: 'Work order completed successfully'
-  },
-  {
-    id: 'LOG-2888',
-    changeRequest: 'CHG-201',
-    action: 'Verified',
-    user: 'QA Lead',
-    timestamp: '2026-02-12 17:00:00',
-    details: 'Post-implementation verification passed'
+onMounted(async () => {
+  try {
+    await loadData()
+  } finally {
+    loading.value = false
   }
-]
+})
+
+function openCreate() {
+  editing.value = null
+  form.value = { ...defaultForm }
+  showModal.value = true
+}
+
+function openEdit(log: ChangeAudit) {
+  editing.value = log
+  form.value = { auditId: log.auditId, changeRequest: log.changeRequest, action: log.action, user: log.user, timestamp: log.timestamp, details: log.details }
+  showModal.value = true
+}
+
+async function save() {
+  saving.value = true
+  try {
+    if (editing.value) await changeAuditsApi.update(editing.value.id, form.value)
+    else await changeAuditsApi.create(form.value)
+    showModal.value = false
+    await loadData()
+  } finally {
+    saving.value = false
+  }
+}
+
+async function remove(id: number) {
+  if (!confirm('Are you sure?')) return
+  await changeAuditsApi.remove(id)
+  await loadData()
+}
 
 const getActionBadgeClass = (action: string): string => {
   const classes = 'badge'

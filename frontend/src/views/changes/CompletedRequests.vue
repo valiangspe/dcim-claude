@@ -1,8 +1,14 @@
 <template>
   <div class="completed-requests">
-    <div class="card">
-      <div class="card-header bg-success text-white">
+    <div v-if="loading" class="text-center py-5">
+      <div class="spinner-border" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+    </div>
+    <div v-else class="card">
+      <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
         <h5 class="mb-0">Completed Change Requests</h5>
+        <button class="btn btn-sm btn-light" @click="openCreate">+ Add</button>
       </div>
       <div class="card-body">
         <div class="table-responsive">
@@ -16,11 +22,12 @@
                 <th>Requested Date</th>
                 <th>Completion Date</th>
                 <th>Duration (Days)</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="req in completedRequests" :key="req.id">
-                <td><strong>{{ req.id }}</strong></td>
+                <td><strong>{{ req.requestId }}</strong></td>
                 <td>{{ req.requester }}</td>
                 <td>{{ req.type }}</td>
                 <td>
@@ -33,6 +40,10 @@
                 <td>
                   <span class="badge bg-info">{{ req.duration }}</span>
                 </td>
+                <td>
+                  <button class="btn btn-sm btn-outline-secondary me-1" @click="openEdit(req)">Edit</button>
+                  <button class="btn btn-sm btn-outline-danger" @click="remove(req.id)">Delete</button>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -42,76 +53,116 @@
         Total completed: {{ completedRequests.length }} requests
       </div>
     </div>
+
+    <div v-if="showModal" class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">{{ editing ? 'Edit' : 'New' }} Completed Request</h5>
+            <button type="button" class="btn-close" @click="showModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">Request ID</label>
+              <input v-model="form.requestId" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Requester</label>
+              <input v-model="form.requester" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Type</label>
+              <input v-model="form.type" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Priority</label>
+              <select v-model="form.priority" class="form-select">
+                <option>Critical</option>
+                <option>High</option>
+                <option>Medium</option>
+                <option>Low</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Requested Date</label>
+              <input v-model="form.requestedDate" type="date" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Completion Date</label>
+              <input v-model="form.completionDate" type="date" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Duration (Days)</label>
+              <input v-model.number="form.duration" type="number" class="form-control" />
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showModal = false">Cancel</button>
+            <button class="btn btn-primary" @click="save" :disabled="saving">
+              <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-interface CompletedRequest {
-  id: string
-  requester: string
-  type: string
-  priority: string
-  requestedDate: string
-  completionDate: string
-  duration: number
+import { ref, onMounted } from 'vue'
+import { completedRequestsApi, type CompletedRequest } from '../../services/api'
+
+const completedRequests = ref<CompletedRequest[]>([])
+const loading = ref(true)
+const showModal = ref(false)
+const saving = ref(false)
+const editing = ref<CompletedRequest | null>(null)
+
+const defaultForm = { requestId: '', requester: '', type: '', priority: 'Medium', requestedDate: '', completionDate: '', duration: 0 }
+const form = ref({ ...defaultForm })
+
+async function loadData() {
+  completedRequests.value = await completedRequestsApi.getAll()
 }
 
-const completedRequests: CompletedRequest[] = [
-  {
-    id: 'CHG-201',
-    requester: 'Alice Brown',
-    type: 'Hardware',
-    priority: 'High',
-    requestedDate: '2026-02-10',
-    completionDate: '2026-02-12',
-    duration: 2
-  },
-  {
-    id: 'CHG-202',
-    requester: 'Bob Davis',
-    type: 'Network',
-    priority: 'Medium',
-    requestedDate: '2026-02-05',
-    completionDate: '2026-02-08',
-    duration: 3
-  },
-  {
-    id: 'CHG-203',
-    requester: 'Carol Martinez',
-    type: 'Software',
-    priority: 'Low',
-    requestedDate: '2026-02-01',
-    completionDate: '2026-02-04',
-    duration: 3
-  },
-  {
-    id: 'CHG-204',
-    requester: 'Diana Lee',
-    type: 'Access',
-    priority: 'High',
-    requestedDate: '2026-01-28',
-    completionDate: '2026-01-30',
-    duration: 2
-  },
-  {
-    id: 'CHG-205',
-    requester: 'Frank Wilson',
-    type: 'Hardware',
-    priority: 'Critical',
-    requestedDate: '2026-01-20',
-    completionDate: '2026-01-21',
-    duration: 1
-  },
-  {
-    id: 'CHG-206',
-    requester: 'Grace Taylor',
-    type: 'Software',
-    priority: 'Medium',
-    requestedDate: '2026-01-15',
-    completionDate: '2026-01-18',
-    duration: 3
+onMounted(async () => {
+  try {
+    await loadData()
+  } finally {
+    loading.value = false
   }
-]
+})
+
+function openCreate() {
+  editing.value = null
+  form.value = { ...defaultForm }
+  showModal.value = true
+}
+
+function openEdit(req: CompletedRequest) {
+  editing.value = req
+  form.value = { requestId: req.requestId, requester: req.requester, type: req.type, priority: req.priority, requestedDate: req.requestedDate, completionDate: req.completionDate, duration: req.duration }
+  showModal.value = true
+}
+
+async function save() {
+  saving.value = true
+  try {
+    if (editing.value) await completedRequestsApi.update(editing.value.id, form.value)
+    else await completedRequestsApi.create(form.value)
+    showModal.value = false
+    await loadData()
+  } finally {
+    saving.value = false
+  }
+}
+
+async function remove(id: number) {
+  if (!confirm('Are you sure?')) return
+  await completedRequestsApi.remove(id)
+  await loadData()
+}
 
 const getPriorityBadgeClass = (priority: string): string => {
   const classes = 'badge'

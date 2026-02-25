@@ -1,6 +1,9 @@
 <template>
   <div class="container-fluid py-4">
-    <h1 class="h3 mb-4">System Audit Logs</h1>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h1 class="h3 mb-0">System Audit Logs</h1>
+      <button class="btn btn-primary btn-sm" @click="openCreate">+ Add Audit Log</button>
+    </div>
 
     <div class="row mb-3">
       <div class="col-md-3">
@@ -25,6 +28,12 @@
       </div>
     </div>
 
+    <div v-if="loading" class="text-center py-5">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+    </div>
+    <template v-else>
     <div class="card">
       <div class="card-body">
         <div class="table-responsive">
@@ -38,6 +47,7 @@
                 <th>Resource</th>
                 <th>Result</th>
                 <th>IP Address</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -57,9 +67,41 @@
                   </span>
                 </td>
                 <td class="font-monospace small">{{ log.ipAddress }}</td>
+                <td>
+                  <button class="btn btn-sm btn-outline-secondary me-1" @click="openEdit(log)">Edit</button>
+                  <button class="btn btn-sm btn-outline-danger" @click="remove(log.id)">Delete</button>
+                </td>
               </tr>
             </tbody>
           </table>
+        </div>
+      </div>
+    </div>
+    </template>
+
+    <!-- Modal -->
+    <div v-if="showModal" class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">{{ editing ? 'Edit' : 'Add' }} Audit Log</h5>
+            <button type="button" class="btn-close" @click="showModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3"><label class="form-label">Timestamp</label><input v-model="form.timestamp" type="text" class="form-control" /></div>
+            <div class="mb-3"><label class="form-label">User</label><input v-model="form.user" type="text" class="form-control" /></div>
+            <div class="mb-3"><label class="form-label">Event Type</label><input v-model="form.eventType" type="text" class="form-control" /></div>
+            <div class="mb-3"><label class="form-label">Action</label><input v-model="form.action" type="text" class="form-control" /></div>
+            <div class="mb-3"><label class="form-label">Resource</label><input v-model="form.resource" type="text" class="form-control" /></div>
+            <div class="mb-3"><label class="form-label">Result</label><input v-model="form.result" type="text" class="form-control" /></div>
+            <div class="mb-3"><label class="form-label">IP Address</label><input v-model="form.ipAddress" type="text" class="form-control" /></div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showModal = false">Cancel</button>
+            <button class="btn btn-primary" @click="save" :disabled="saving">
+              <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>Save
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -67,88 +109,62 @@
 </template>
 
 <script setup lang="ts">
-const logs = [
-  {
-    id: 1,
-    timestamp: '2026-02-20 14:35:22 UTC',
-    user: 'John Administrator',
-    eventType: 'Login',
-    action: 'User login',
-    resource: 'Dashboard',
-    result: 'Success',
-    ipAddress: '192.168.1.100'
-  },
-  {
-    id: 2,
-    timestamp: '2026-02-20 14:30:15 UTC',
-    user: 'Sarah Operations',
-    eventType: 'Configuration',
-    action: 'Modified alarm thresholds',
-    resource: 'SystemConfig',
-    result: 'Success',
-    ipAddress: '192.168.1.101'
-  },
-  {
-    id: 3,
-    timestamp: '2026-02-20 14:25:45 UTC',
-    user: 'System',
-    eventType: 'Security',
-    action: 'API key rotation',
-    resource: 'ApiAccess',
-    result: 'Success',
-    ipAddress: '127.0.0.1'
-  },
-  {
-    id: 4,
-    timestamp: '2026-02-20 14:20:30 UTC',
-    user: 'Mike Engineer',
-    eventType: 'User Management',
-    action: 'Password change',
-    resource: 'User#4',
-    result: 'Success',
-    ipAddress: '192.168.1.102'
-  },
-  {
-    id: 5,
-    timestamp: '2026-02-20 14:15:10 UTC',
-    user: 'John Administrator',
-    eventType: 'Configuration',
-    action: 'Added new sensor',
-    resource: 'SensorConfig',
-    result: 'Success',
-    ipAddress: '192.168.1.100'
-  },
-  {
-    id: 6,
-    timestamp: '2026-02-20 14:10:55 UTC',
-    user: 'Lisa Viewer',
-    eventType: 'Login',
-    action: 'Failed login attempt',
-    resource: 'Dashboard',
-    result: 'Failed',
-    ipAddress: '10.0.2.50'
-  },
-  {
-    id: 7,
-    timestamp: '2026-02-20 14:05:22 UTC',
-    user: 'System',
-    eventType: 'Security',
-    action: 'Backup completed',
-    resource: 'Database',
-    result: 'Success',
-    ipAddress: '127.0.0.1'
-  },
-  {
-    id: 8,
-    timestamp: '2026-02-20 13:55:40 UTC',
-    user: 'Sarah Operations',
-    eventType: 'User Management',
-    action: 'Created new user',
-    resource: 'User#6',
-    result: 'Success',
-    ipAddress: '192.168.1.101'
+import { ref, onMounted } from 'vue'
+import { settingsAuditsApi, type SettingsAudit } from '../../services/api'
+
+const logs = ref<SettingsAudit[]>([])
+const loading = ref(true)
+const showModal = ref(false)
+const editing = ref<SettingsAudit | null>(null)
+const saving = ref(false)
+
+const defaultForm = { timestamp: '', user: '', eventType: '', action: '', resource: '', result: '', ipAddress: '' }
+const form = ref({ ...defaultForm })
+
+async function loadData() {
+  logs.value = await settingsAuditsApi.getAll()
+}
+
+onMounted(async () => {
+  try {
+    await loadData()
+  } finally {
+    loading.value = false
   }
-];
+})
+
+function openCreate() {
+  editing.value = null
+  form.value = { ...defaultForm }
+  showModal.value = true
+}
+
+function openEdit(item: SettingsAudit) {
+  editing.value = item
+  form.value = { timestamp: item.timestamp, user: item.user, eventType: item.eventType, action: item.action, resource: item.resource, result: item.result, ipAddress: item.ipAddress }
+  showModal.value = true
+}
+
+async function save() {
+  saving.value = true
+  try {
+    if (editing.value) {
+      await settingsAuditsApi.update(editing.value.id, form.value)
+    } else {
+      await settingsAuditsApi.create(form.value)
+    }
+    showModal.value = false
+    await loadData()
+  } finally {
+    saving.value = false
+  }
+}
+
+async function remove(id: number) {
+  if (!confirm('Are you sure you want to delete this audit log?')) return
+  await settingsAuditsApi.remove(id)
+  await loadData()
+}
 
 function getBadgeClass(eventType: string): string {
   const classMap: Record<string, string> = {

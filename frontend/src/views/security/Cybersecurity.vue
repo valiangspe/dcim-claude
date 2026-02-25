@@ -1,24 +1,60 @@
 <script setup lang="ts">
-const firewallEvents = [
-  { id: 1, timestamp: '2026-02-20 15:40:22', type: 'Port Scan Detected', sourceIP: '192.168.1.45', destPort: 22, action: 'blocked', severity: 'medium' },
-  { id: 2, timestamp: '2026-02-20 15:35:18', type: 'DDoS Pattern', sourceIP: '203.0.113.8', destPort: 443, action: 'rate-limited', severity: 'high' },
-  { id: 3, timestamp: '2026-02-20 15:28:47', type: 'SQL Injection Attempt', sourceIP: '198.51.100.22', destPort: 3306, action: 'blocked', severity: 'critical' },
-  { id: 4, timestamp: '2026-02-20 15:20:12', type: 'Suspicious Traffic', sourceIP: '10.0.5.77', destPort: 8080, action: 'logged', severity: 'low' },
-]
+import { ref, onMounted } from 'vue'
+import { firewallEventsApi, type FirewallEvent, idsAlertsApi, type IdsAlert, blockedIpsApi, type BlockedIp } from '../../services/api'
 
-const idsAlerts = [
-  { id: 1, timestamp: '2026-02-20 15:38:45', alert: 'Malware Signature Match', protocol: 'HTTP', confidence: 89, status: 'investigating' },
-  { id: 2, timestamp: '2026-02-20 15:32:19', alert: 'Buffer Overflow Attempt', protocol: 'HTTPS', confidence: 94, status: 'blocked' },
-  { id: 3, timestamp: '2026-02-20 15:25:33', alert: 'Command Injection Pattern', protocol: 'SSH', confidence: 76, status: 'logged' },
-  { id: 4, timestamp: '2026-02-20 15:15:07', alert: 'Suspicious DNS Query', protocol: 'DNS', confidence: 82, status: 'blocked' },
-]
+const firewallEvents = ref<FirewallEvent[]>([])
+const idsAlerts = ref<IdsAlert[]>([])
+const blockedIPs = ref<BlockedIp[]>([])
+const loading = ref(true)
 
-const blockedIPs = [
-  { ip: '192.0.2.100', reason: 'Brute Force Attack', incidents: 34, firstSeen: '2026-02-18', status: 'active' },
-  { ip: '203.0.113.42', reason: 'Malware C2 Communication', incidents: 12, firstSeen: '2026-02-19', status: 'active' },
-  { ip: '198.51.100.88', reason: 'Suspicious Scanning', incidents: 8, firstSeen: '2026-02-20', status: 'active' },
-  { ip: '192.0.2.55', reason: 'DDoS Source', incidents: 156, firstSeen: '2026-02-17', status: 'inactive' },
-]
+const showModal = ref(false)
+const saving = ref(false)
+const editing = ref<FirewallEvent | null>(null)
+const defaultForm = { timestamp: '', type: '', sourceIP: '', destPort: 0, action: '', severity: '' }
+const form = ref({ ...defaultForm })
+
+async function loadData() {
+  const [fw, ids, blocked] = await Promise.all([
+    firewallEventsApi.getAll(),
+    idsAlertsApi.getAll(),
+    blockedIpsApi.getAll(),
+  ])
+  firewallEvents.value = fw
+  idsAlerts.value = ids
+  blockedIPs.value = blocked
+}
+
+onMounted(async () => { try { await loadData() } finally { loading.value = false } })
+
+function openCreate() {
+  editing.value = null
+  form.value = { ...defaultForm }
+  showModal.value = true
+}
+
+function openEdit(event: FirewallEvent) {
+  editing.value = event
+  form.value = { timestamp: event.timestamp, type: event.type, sourceIP: event.sourceIP, destPort: event.destPort, action: event.action, severity: event.severity }
+  showModal.value = true
+}
+
+async function save() {
+  saving.value = true
+  try {
+    if (editing.value) await firewallEventsApi.update(editing.value.id, form.value)
+    else await firewallEventsApi.create(form.value)
+    showModal.value = false
+    await loadData()
+  } finally {
+    saving.value = false
+  }
+}
+
+async function remove(id: number) {
+  if (!confirm('Are you sure?')) return
+  await firewallEventsApi.remove(id)
+  await loadData()
+}
 
 const severityColor = {
   critical: 'danger',
@@ -39,6 +75,9 @@ const statusColor = {
 <template>
   <div>
     <h4 class="mb-4">Cybersecurity</h4>
+
+    <div v-if="loading" class="text-center py-5"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>
+    <template v-else>
 
     <!-- Stats Row -->
     <div class="row g-3 mb-4">
@@ -78,7 +117,10 @@ const statusColor = {
 
     <!-- Tabs for different views -->
     <div class="card border-0 shadow-sm mb-4">
-      <div class="card-header bg-transparent fw-semibold">Firewall Events</div>
+      <div class="card-header bg-transparent fw-semibold d-flex align-items-center justify-content-between">
+        <span>Firewall Events</span>
+        <button class="btn btn-sm btn-primary" @click="openCreate">+ Add Event</button>
+      </div>
       <div class="card-body p-0">
         <table class="table table-hover align-middle mb-0">
           <thead class="table-light">
@@ -89,6 +131,7 @@ const statusColor = {
               <th>Dest Port</th>
               <th>Action</th>
               <th>Severity</th>
+              <th style="width:120px">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -99,6 +142,10 @@ const statusColor = {
               <td>{{ event.destPort }}</td>
               <td><span class="badge bg-secondary">{{ event.action }}</span></td>
               <td><span class="badge" :class="`bg-${severityColor[event.severity as keyof typeof severityColor]}`">{{ event.severity }}</span></td>
+              <td>
+                <button class="btn btn-sm btn-outline-primary me-1" @click="openEdit(event)">Edit</button>
+                <button class="btn btn-sm btn-outline-danger" @click="remove(event.id)">Delete</button>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -163,6 +210,57 @@ const statusColor = {
             </tr>
           </tbody>
         </table>
+      </div>
+    </div>
+    </template>
+
+    <!-- Modal -->
+    <div v-if="showModal" class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">{{ editing ? 'Edit' : 'Add' }} Firewall Event</h5>
+            <button type="button" class="btn-close" @click="showModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">Timestamp</label>
+              <input v-model="form.timestamp" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Event Type</label>
+              <input v-model="form.type" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Source IP</label>
+              <input v-model="form.sourceIP" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Dest Port</label>
+              <input v-model.number="form.destPort" type="number" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Action</label>
+              <input v-model="form.action" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Severity</label>
+              <select v-model="form.severity" class="form-select">
+                <option value="critical">critical</option>
+                <option value="high">high</option>
+                <option value="medium">medium</option>
+                <option value="low">low</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showModal = false">Cancel</button>
+            <button class="btn btn-primary" @click="save" :disabled="saving">
+              <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>
+              Save
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </div>

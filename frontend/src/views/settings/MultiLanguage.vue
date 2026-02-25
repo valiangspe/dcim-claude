@@ -1,7 +1,16 @@
 <template>
   <div class="container-fluid py-4">
-    <h1 class="h3 mb-4">Multi-Language Support</h1>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h1 class="h3 mb-0">Multi-Language Support</h1>
+      <button class="btn btn-primary btn-sm" @click="openCreate">+ Add Language</button>
+    </div>
 
+    <div v-if="loading" class="text-center py-5">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+    </div>
+    <template v-else>
     <div class="card">
       <div class="card-body">
         <table class="table table-hover mb-0">
@@ -40,99 +49,102 @@
               </td>
               <td class="text-muted small">{{ language.lastUpdated }}</td>
               <td>
-                <button class="btn btn-sm btn-outline-secondary">Edit</button>
+                <button class="btn btn-sm btn-outline-secondary me-1" @click="openEdit(language)">Edit</button>
+                <button class="btn btn-sm btn-outline-danger" @click="remove(language.id)">Delete</button>
               </td>
             </tr>
           </tbody>
         </table>
       </div>
     </div>
+    </template>
+
+    <!-- Modal -->
+    <div v-if="showModal" class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">{{ editing ? 'Edit' : 'Add' }} Language</h5>
+            <button type="button" class="btn-close" @click="showModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3"><label class="form-label">Name</label><input v-model="form.name" type="text" class="form-control" /></div>
+            <div class="mb-3"><label class="form-label">Code</label><input v-model="form.code" type="text" class="form-control" /></div>
+            <div class="mb-3"><label class="form-label">Native Name</label><input v-model="form.native" type="text" class="form-control" /></div>
+            <div class="mb-3"><label class="form-label">Translated</label><input v-model.number="form.translated" type="number" class="form-control" /></div>
+            <div class="mb-3"><label class="form-label">Total</label><input v-model.number="form.total" type="number" class="form-control" /></div>
+            <div class="mb-3"><label class="form-label">Completion %</label><input v-model.number="form.completion" type="number" class="form-control" /></div>
+            <div class="mb-3"><label class="form-label">Last Updated</label><input v-model="form.lastUpdated" type="text" class="form-control" /></div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showModal = false">Cancel</button>
+            <button class="btn btn-primary" @click="save" :disabled="saving">
+              <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-const languages = [
-  {
-    id: 1,
-    name: 'English',
-    code: 'en-US',
-    native: 'English (United States)',
-    translated: 1245,
-    total: 1245,
-    completion: 100,
-    lastUpdated: '2026-02-15'
-  },
-  {
-    id: 2,
-    name: 'German',
-    code: 'de-DE',
-    native: 'Deutsch',
-    translated: 1245,
-    total: 1245,
-    completion: 100,
-    lastUpdated: '2026-02-10'
-  },
-  {
-    id: 3,
-    name: 'French',
-    code: 'fr-FR',
-    native: 'Français',
-    translated: 1230,
-    total: 1245,
-    completion: 99,
-    lastUpdated: '2026-02-18'
-  },
-  {
-    id: 4,
-    name: 'Spanish',
-    code: 'es-ES',
-    native: 'Español',
-    translated: 1200,
-    total: 1245,
-    completion: 96,
-    lastUpdated: '2026-02-12'
-  },
-  {
-    id: 5,
-    name: 'Japanese',
-    code: 'ja-JP',
-    native: '日本語',
-    translated: 890,
-    total: 1245,
-    completion: 71,
-    lastUpdated: '2026-02-05'
-  },
-  {
-    id: 6,
-    name: 'Simplified Chinese',
-    code: 'zh-CN',
-    native: '简体中文',
-    translated: 780,
-    total: 1245,
-    completion: 63,
-    lastUpdated: '2026-01-28'
-  },
-  {
-    id: 7,
-    name: 'Korean',
-    code: 'ko-KR',
-    native: '한국어',
-    translated: 450,
-    total: 1245,
-    completion: 36,
-    lastUpdated: '2026-01-15'
-  },
-  {
-    id: 8,
-    name: 'Portuguese',
-    code: 'pt-BR',
-    native: 'Português (Brasil)',
-    translated: 250,
-    total: 1245,
-    completion: 20,
-    lastUpdated: '2026-01-10'
+import { ref, onMounted } from 'vue'
+import { languageConfigsApi, type LanguageConfig } from '../../services/api'
+
+const languages = ref<LanguageConfig[]>([])
+const loading = ref(true)
+const showModal = ref(false)
+const editing = ref<LanguageConfig | null>(null)
+const saving = ref(false)
+
+const defaultForm = { name: '', code: '', native: '', translated: 0, total: 0, completion: 0, lastUpdated: '' }
+const form = ref({ ...defaultForm })
+
+async function loadData() {
+  languages.value = await languageConfigsApi.getAll()
+}
+
+onMounted(async () => {
+  try {
+    await loadData()
+  } finally {
+    loading.value = false
   }
-];
+})
+
+function openCreate() {
+  editing.value = null
+  form.value = { ...defaultForm }
+  showModal.value = true
+}
+
+function openEdit(item: LanguageConfig) {
+  editing.value = item
+  form.value = { name: item.name, code: item.code, native: item.native, translated: item.translated, total: item.total, completion: item.completion, lastUpdated: item.lastUpdated }
+  showModal.value = true
+}
+
+async function save() {
+  saving.value = true
+  try {
+    if (editing.value) {
+      await languageConfigsApi.update(editing.value.id, form.value)
+    } else {
+      await languageConfigsApi.create(form.value)
+    }
+    showModal.value = false
+    await loadData()
+  } finally {
+    saving.value = false
+  }
+}
+
+async function remove(id: number) {
+  if (!confirm('Are you sure you want to delete this language?')) return
+  await languageConfigsApi.remove(id)
+  await loadData()
+}
 
 function getProgressClass(completion: number): string {
   if (completion === 100) return 'bg-success';

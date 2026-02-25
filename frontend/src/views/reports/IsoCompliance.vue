@@ -1,8 +1,15 @@
 <template>
   <div class="iso-compliance">
+    <div v-if="loading" class="text-center py-5">
+      <div class="spinner-border text-warning" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+    </div>
+    <template v-else>
     <div class="card">
-      <div class="card-header bg-warning text-dark">
+      <div class="card-header bg-warning text-dark d-flex align-items-center justify-content-between">
         <h5 class="mb-0">ISO 22237 Compliance Checklist</h5>
+        <button class="btn btn-sm btn-dark" @click="openCreate">+ Add Section</button>
       </div>
       <div class="card-body">
         <div class="row g-4">
@@ -13,7 +20,7 @@
                 <small class="text-muted">{{ section.description }}</small>
               </div>
               <div class="card-body">
-                <div v-for="item in section.items" :key="item.id" class="mb-3">
+                <div v-for="item in parseItems(section.items)" :key="item.id" class="mb-3">
                   <div class="d-flex justify-content-between align-items-start">
                     <div class="flex-grow-1">
                       <small class="fw-semibold">{{ item.name }}</small>
@@ -25,10 +32,14 @@
                   </div>
                 </div>
               </div>
-              <div class="card-footer bg-light">
+              <div class="card-footer bg-light d-flex justify-content-between align-items-center">
                 <small class="text-muted">
                   {{ getSectionStats(section) }}
                 </small>
+                <div>
+                  <button class="btn btn-sm btn-outline-primary me-1" @click="openEdit(section)">Edit</button>
+                  <button class="btn btn-sm btn-outline-danger" @click="remove(section.id)">Delete</button>
+                </div>
               </div>
             </div>
           </div>
@@ -51,10 +62,51 @@
         </div>
       </div>
     </div>
+    </template>
+
+    <!-- Modal -->
+    <div v-if="showModal" class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">{{ editing ? 'Edit' : 'Add' }} Compliance Section</h5>
+            <button type="button" class="btn-close" @click="showModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">Section ID</label>
+              <input v-model="form.sectionId" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Name</label>
+              <input v-model="form.name" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Description</label>
+              <textarea v-model="form.description" class="form-control" rows="2"></textarea>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Items (JSON)</label>
+              <textarea v-model="form.items" class="form-control" rows="4"></textarea>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showModal = false">Cancel</button>
+            <button class="btn btn-primary" @click="save" :disabled="saving">
+              <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import { complianceSectionsApi, type ComplianceSection } from '../../services/api'
+
 interface ComplianceItem {
   id: string
   name: string
@@ -62,81 +114,63 @@ interface ComplianceItem {
   status: string
 }
 
-interface ComplianceSection {
-  id: string
-  name: string
-  description: string
-  items: ComplianceItem[]
+const complianceSections = ref<ComplianceSection[]>([])
+const loading = ref(true)
+const showModal = ref(false)
+const saving = ref(false)
+const editing = ref<ComplianceSection | null>(null)
+const defaultForm = { sectionId: '', name: '', description: '', items: '[]' }
+const form = ref({ ...defaultForm })
+
+function openCreate() {
+  editing.value = null
+  form.value = { ...defaultForm }
+  showModal.value = true
 }
 
-const complianceSections: ComplianceSection[] = [
-  {
-    id: '1',
-    name: 'Site Infrastructure',
-    description: 'Building and location requirements',
-    items: [
-      { id: '1-1', name: 'Facility Location', detail: 'Away from hazardous areas', status: 'Pass' },
-      { id: '1-2', name: 'Access Control', detail: 'Physical access restrictions', status: 'Pass' },
-      { id: '1-3', name: 'Environmental Controls', detail: 'Temperature and humidity control', status: 'Pass' },
-      { id: '1-4', name: 'Fire Detection', detail: 'Fire alarm systems installed', status: 'Pass' }
-    ]
-  },
-  {
-    id: '2',
-    name: 'Power Distribution',
-    description: 'Electrical infrastructure',
-    items: [
-      { id: '2-1', name: 'UPS Systems', detail: 'Uninterruptible power supply', status: 'Pass' },
-      { id: '2-2', name: 'Generator Backup', detail: '72-hour fuel capacity', status: 'Pass' },
-      { id: '2-3', name: 'Redundancy', detail: 'N+1 power supply configuration', status: 'Fail' },
-      { id: '2-4', name: 'Power Monitoring', detail: 'Continuous power monitoring', status: 'Pass' }
-    ]
-  },
-  {
-    id: '3',
-    name: 'Cooling System',
-    description: 'Thermal management',
-    items: [
-      { id: '3-1', name: 'Redundant Cooling', detail: 'N+1 cooling units', status: 'Pass' },
-      { id: '3-2', name: 'Temperature Monitoring', detail: 'Real-time temperature sensors', status: 'Pass' },
-      { id: '3-3', name: 'Preventive Maintenance', detail: 'Regular HVAC servicing', status: 'Pass' },
-      { id: '3-4', name: 'Hot/Cold Aisle', detail: 'Proper airflow containment', status: 'Fail' }
-    ]
-  },
-  {
-    id: '4',
-    name: 'Security',
-    description: 'Information and physical security',
-    items: [
-      { id: '4-1', name: 'CCTV Surveillance', detail: 'Comprehensive video coverage', status: 'Pass' },
-      { id: '4-2', name: 'Biometric Access', detail: 'Multi-factor authentication', status: 'Pass' },
-      { id: '4-3', name: 'Intrusion Detection', detail: 'IDS/IPS systems deployed', status: 'Pass' },
-      { id: '4-4', name: 'Encryption', detail: 'Data in transit and at rest encrypted', status: 'Pass' }
-    ]
-  },
-  {
-    id: '5',
-    name: 'Management',
-    description: 'Operational procedures',
-    items: [
-      { id: '5-1', name: 'Change Management', detail: 'Formal change control process', status: 'Pass' },
-      { id: '5-2', name: 'Documentation', detail: 'Complete infrastructure documentation', status: 'Pass' },
-      { id: '5-3', name: 'Disaster Recovery', detail: 'DR plan and regular testing', status: 'Fail' },
-      { id: '5-4', name: 'Audit Logs', detail: 'Comprehensive audit trailing', status: 'Pass' }
-    ]
-  },
-  {
-    id: '6',
-    name: 'Equipment',
-    description: 'Hardware and assets',
-    items: [
-      { id: '6-1', name: 'Equipment Standards', detail: 'Industry-standard equipment', status: 'Pass' },
-      { id: '6-2', name: 'Inventory Management', detail: 'Asset tracking system', status: 'Pass' },
-      { id: '6-3', name: 'Maintenance Logs', detail: 'Equipment maintenance records', status: 'Pass' },
-      { id: '6-4', name: 'Decommissioning', detail: 'Secure disposal procedures', status: 'Pass' }
-    ]
+function openEdit(item: ComplianceSection) {
+  editing.value = item
+  form.value = { sectionId: item.sectionId, name: item.name, description: item.description, items: item.items }
+  showModal.value = true
+}
+
+async function save() {
+  saving.value = true
+  try {
+    if (editing.value) await complianceSectionsApi.update(editing.value.id, form.value)
+    else await complianceSectionsApi.create(form.value)
+    showModal.value = false
+    await loadData()
+  } finally {
+    saving.value = false
   }
-]
+}
+
+async function remove(id: number) {
+  if (!confirm('Are you sure?')) return
+  await complianceSectionsApi.remove(id)
+  await loadData()
+}
+
+async function loadData() {
+  complianceSections.value = await complianceSectionsApi.getAll()
+}
+
+onMounted(async () => {
+  try {
+    await loadData()
+  } finally {
+    loading.value = false
+  }
+})
+
+function parseItems(items: string): ComplianceItem[] {
+  try {
+    return JSON.parse(items)
+  } catch {
+    return []
+  }
+}
 
 const getComplianceBadgeClass = (status: string): string => {
   const classes = 'badge'
@@ -146,25 +180,26 @@ const getComplianceBadgeClass = (status: string): string => {
 }
 
 const getSectionStats = (section: ComplianceSection): string => {
-  const pass = section.items.filter((item) => item.status === 'Pass').length
-  const total = section.items.length
+  const parsed = parseItems(section.items)
+  const pass = parsed.filter((item) => item.status === 'Pass').length
+  const total = parsed.length
   return `${pass}/${total} compliant`
 }
 
 const getTotalChecks = (): number => {
-  return complianceSections.reduce((sum, section) => sum + section.items.length, 0)
+  return complianceSections.value.reduce((sum, section) => sum + parseItems(section.items).length, 0)
 }
 
 const getCompliantCount = (): number => {
-  return complianceSections.reduce(
-    (sum, section) => sum + section.items.filter((item) => item.status === 'Pass').length,
+  return complianceSections.value.reduce(
+    (sum, section) => sum + parseItems(section.items).filter((item) => item.status === 'Pass').length,
     0
   )
 }
 
 const getNonCompliantCount = (): number => {
-  return complianceSections.reduce(
-    (sum, section) => sum + section.items.filter((item) => item.status === 'Fail').length,
+  return complianceSections.value.reduce(
+    (sum, section) => sum + parseItems(section.items).filter((item) => item.status === 'Fail').length,
     0
   )
 }

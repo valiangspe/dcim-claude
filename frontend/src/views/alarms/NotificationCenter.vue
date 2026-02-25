@@ -1,8 +1,13 @@
 <template>
   <div class="container-fluid">
+    <div v-if="loading" class="text-center py-5"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>
+    <template v-else>
     <div class="d-flex justify-content-between align-items-center mb-4">
       <h1>Notification Center</h1>
-      <span class="badge bg-danger fs-6">{{ unreadCount }} Unread</span>
+      <div>
+        <span class="badge bg-danger fs-6 me-2">{{ unreadCount }} Unread</span>
+        <button class="btn btn-sm btn-primary" @click="openCreate">+ Add Notification</button>
+      </div>
     </div>
 
     <!-- Action Buttons -->
@@ -36,12 +41,57 @@
             <div class="ms-3">
               <button
                 v-if="!notification.read"
-                class="btn btn-xs btn-outline-secondary"
+                class="btn btn-xs btn-outline-secondary me-1"
                 @click="markAsRead(notification.id)"
               >
                 Mark Read
               </button>
+              <button class="btn btn-xs btn-outline-primary me-1" @click="openEdit(notification)">Edit</button>
+              <button class="btn btn-xs btn-outline-danger" @click="remove(notification.id)">Delete</button>
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    </template>
+
+    <!-- Modal -->
+    <div v-if="showModal" class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">{{ editing ? 'Edit' : 'Add' }} Notification</h5>
+            <button type="button" class="btn-close" @click="showModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">Type</label>
+              <select v-model="form.type" class="form-select">
+                <option value="Alert">Alert</option>
+                <option value="Warning">Warning</option>
+                <option value="Info">Info</option>
+                <option value="Maintenance">Maintenance</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Message</label>
+              <input v-model="form.message" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Time</label>
+              <input v-model="form.time" type="text" class="form-control" />
+            </div>
+            <div class="mb-3 form-check">
+              <input v-model="form.read" type="checkbox" class="form-check-input" id="formRead" />
+              <label class="form-check-label" for="formRead">Read</label>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showModal = false">Cancel</button>
+            <button class="btn btn-primary" @click="save" :disabled="saving">
+              <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>
+              Save
+            </button>
           </div>
         </div>
       </div>
@@ -50,72 +100,66 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted } from 'vue'
+import { notificationRecordsApi, type NotificationRecord } from '../../services/api'
 
-interface Notification {
-  id: number
-  type: 'Alert' | 'Warning' | 'Info' | 'Maintenance'
-  message: string
-  time: Date
-  read: boolean
+const notifications = ref<NotificationRecord[]>([])
+const loading = ref(true)
+
+const showModal = ref(false)
+const saving = ref(false)
+const editing = ref<NotificationRecord | null>(null)
+const defaultForm = { type: 'Info', message: '', time: '', read: false }
+const form = ref({ ...defaultForm })
+
+async function loadData() {
+  notifications.value = await notificationRecordsApi.getAll()
 }
 
-const notifications = ref<Notification[]>([
-  {
-    id: 1,
-    type: 'Alert',
-    message: 'Critical: Temperature in Rack A-01 exceeded 42°C',
-    time: new Date(Date.now() - 2 * 60000),
-    read: false,
-  },
-  {
-    id: 2,
-    type: 'Alert',
-    message: 'High: Power consumption anomaly in PDU-B-03',
-    time: new Date(Date.now() - 8 * 60000),
-    read: false,
-  },
-  {
-    id: 3,
-    type: 'Warning',
-    message: 'Cooling Unit C-02 refrigerant pressure low',
-    time: new Date(Date.now() - 30 * 60000),
-    read: true,
-  },
-  {
-    id: 4,
-    type: 'Info',
-    message: 'Scheduled maintenance window completed successfully',
-    time: new Date(Date.now() - 2 * 60 * 60 * 1000),
-    read: true,
-  },
-  {
-    id: 5,
-    type: 'Warning',
-    message: 'Network Switch D-01 port utilization at 88%',
-    time: new Date(Date.now() - 4 * 60 * 60 * 1000),
-    read: true,
-  },
-  {
-    id: 6,
-    type: 'Maintenance',
-    message: 'Scheduled maintenance: UPS battery replacement on Feb 25',
-    time: new Date(Date.now() - 24 * 60 * 60 * 1000),
-    read: true,
-  },
-])
+onMounted(async () => { try { await loadData() } finally { loading.value = false } })
+
+function openCreate() {
+  editing.value = null
+  form.value = { ...defaultForm }
+  showModal.value = true
+}
+
+function openEdit(notification: NotificationRecord) {
+  editing.value = notification
+  form.value = { type: notification.type, message: notification.message, time: notification.time, read: notification.read }
+  showModal.value = true
+}
+
+async function save() {
+  saving.value = true
+  try {
+    if (editing.value) await notificationRecordsApi.update(editing.value.id, form.value)
+    else await notificationRecordsApi.create(form.value)
+    showModal.value = false
+    await loadData()
+  } finally {
+    saving.value = false
+  }
+}
+
+async function remove(id: number) {
+  if (!confirm('Are you sure?')) return
+  await notificationRecordsApi.remove(id)
+  await loadData()
+}
 
 const unreadCount = computed(() => notifications.value.filter((n) => !n.read).length)
 
-function formatTime(date: Date): string {
+function formatTime(date: string | Date): string {
+  const d = typeof date === 'string' ? new Date(date) : date
   const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
+  const diffMs = now.getTime() - d.getTime()
   const diffMins = Math.floor(diffMs / 60000)
 
   if (diffMins < 60) return `${diffMins}m ago`
   const diffHours = Math.floor(diffMins / 60)
   if (diffHours < 24) return `${diffHours}h ago`
-  return date.toLocaleDateString()
+  return d.toLocaleDateString()
 }
 
 function getTypeBadgeClass(type: string): string {

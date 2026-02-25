@@ -1,15 +1,24 @@
 <template>
   <div class="mode-toggle">
+    <div v-if="loading" class="text-center py-5">
+      <div class="spinner-border text-info" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+    </div>
+    <template v-else>
     <div class="card">
       <div class="card-header bg-info text-white">
         <div class="d-flex justify-content-between align-items-center">
           <h5 class="mb-0">Report Display Mode</h5>
+          <div class="d-flex gap-2 align-items-center">
+          <button class="btn btn-sm btn-light" @click="openCreate">+ Add Metric</button>
           <div class="btn-group btn-group-sm" role="group">
             <input v-model="viewMode" type="radio" class="btn-check" id="concise" value="concise" />
             <label class="btn btn-light" for="concise">Concise</label>
 
             <input v-model="viewMode" type="radio" class="btn-check" id="detailed" value="detailed" />
             <label class="btn btn-light" for="detailed">Detailed</label>
+          </div>
           </div>
         </div>
       </div>
@@ -28,8 +37,8 @@
           <hr class="my-4" />
           <div class="row g-3">
             <div v-for="status in conciseStatus" :key="status.id" class="col-md-4 text-center">
-              <span :class="getStatusBadgeClass(status.status)" class="badge fs-6">
-                {{ status.label }}: {{ status.value }}
+              <span :class="getStatusBadgeClass(status.color)" class="badge fs-6">
+                {{ status.name }}: {{ status.value }}
               </span>
             </div>
           </div>
@@ -42,11 +51,9 @@
               <thead>
                 <tr class="table-light">
                   <th>Metric</th>
-                  <th>Current</th>
-                  <th>Average</th>
-                  <th>Max</th>
-                  <th>Min</th>
-                  <th>Trend</th>
+                  <th>Value</th>
+                  <th>Unit</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -54,16 +61,13 @@
                   <td><strong>{{ metric.name }}</strong></td>
                   <td>
                     <span class="badge" :style="{ backgroundColor: metric.color }">
-                      {{ metric.current }}
+                      {{ metric.value }}
                     </span>
                   </td>
-                  <td>{{ metric.average }}</td>
-                  <td>{{ metric.max }}</td>
-                  <td>{{ metric.min }}</td>
+                  <td>{{ metric.unit }}</td>
                   <td>
-                    <span :class="getTrendBadgeClass(metric.trend)">
-                      {{ metric.trend }}
-                    </span>
+                    <button class="btn btn-sm btn-outline-primary me-1" @click="openEdit(metric)">Edit</button>
+                    <button class="btn btn-sm btn-outline-danger" @click="remove(metric.id)">Delete</button>
                   </td>
                 </tr>
               </tbody>
@@ -73,18 +77,65 @@
           <hr class="my-4" />
 
           <h6 class="fw-bold mb-3">Performance Summary</h6>
-          <div v-for="summary in detailedSummary" :key="summary.id" class="mb-3">
+          <div v-for="metric in summaryMetrics" :key="metric.id" class="mb-3">
             <div class="d-flex justify-content-between align-items-center mb-1">
-              <small class="fw-semibold">{{ summary.name }}</small>
-              <small class="text-muted">{{ summary.percentage }}%</small>
+              <small class="fw-semibold">{{ metric.name }}</small>
+              <small class="text-muted">{{ metric.value }}{{ metric.unit }}</small>
             </div>
             <div class="progress" style="height: 20px">
               <div
                 class="progress-bar"
-                :style="{ width: summary.percentage + '%', backgroundColor: summary.color }"
+                :style="{ width: metric.value + '%', backgroundColor: metric.color }"
                 role="progressbar"
               ></div>
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    </template>
+
+    <!-- Modal -->
+    <div v-if="showModal" class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">{{ editing ? 'Edit' : 'Add' }} Metric</h5>
+            <button type="button" class="btn-close" @click="showModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">Name</label>
+              <input v-model="form.name" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Value</label>
+              <input v-model="form.value" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Unit</label>
+              <input v-model="form.unit" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Color</label>
+              <input v-model="form.color" type="color" class="form-control form-control-color" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Category</label>
+              <select v-model="form.category" class="form-select">
+                <option value="concise">Concise</option>
+                <option value="concise-status">Concise Status</option>
+                <option value="detailed">Detailed</option>
+                <option value="summary">Summary</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showModal = false">Cancel</button>
+            <button class="btn btn-primary" @click="save" :disabled="saving">
+              <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>
+              Save
+            </button>
           </div>
         </div>
       </div>
@@ -93,136 +144,76 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-
-interface ConciseMetric {
-  id: string
-  name: string
-  value: string
-  unit: string
-  color: string
-}
-
-interface ConciseStatus {
-  id: string
-  label: string
-  value: string
-  status: string
-}
-
-interface DetailedMetric {
-  id: string
-  name: string
-  current: string
-  average: string
-  max: string
-  min: string
-  trend: string
-  color: string
-}
-
-interface SummaryMetric {
-  id: string
-  name: string
-  percentage: number
-  color: string
-}
+import { ref, computed, onMounted } from 'vue'
+import { reportMetricsApi, type ReportMetric } from '../../services/api'
 
 const viewMode = ref<string>('concise')
+const allMetrics = ref<ReportMetric[]>([])
+const loading = ref(true)
+const showModal = ref(false)
+const saving = ref(false)
+const editing = ref<ReportMetric | null>(null)
+const defaultForm = { name: '', value: '', unit: '', color: '#0d6efd', category: 'concise' }
+const form = ref({ ...defaultForm })
 
-const conciseMetrics: ConciseMetric[] = [
-  { id: '1', name: 'Power Usage', value: '720', unit: 'kW', color: '#ffc107' },
-  { id: '2', name: 'Avg Temperature', value: '24.5', unit: '°C', color: '#0dcaf0' },
-  { id: '3', name: 'Space Utilization', value: '82%', unit: 'capacity', color: '#198754' }
-]
+function openCreate() {
+  editing.value = null
+  form.value = { ...defaultForm }
+  showModal.value = true
+}
 
-const conciseStatus: ConciseStatus[] = [
-  { id: '1', label: 'Status', value: 'Healthy', status: 'success' },
-  { id: '2', label: 'Alerts', value: '2 Minor', status: 'warning' },
-  { id: '3', label: 'Capacity', value: 'Good', status: 'info' }
-]
+function openEdit(item: ReportMetric) {
+  editing.value = item
+  form.value = { name: item.name, value: item.value, unit: item.unit, color: item.color, category: item.category }
+  showModal.value = true
+}
 
-const detailedMetrics: DetailedMetric[] = [
-  {
-    id: '1',
-    name: 'Power Consumption',
-    current: '720 kW',
-    average: '685 kW',
-    max: '825 kW',
-    min: '580 kW',
-    trend: 'Stable',
-    color: '#ffc107'
-  },
-  {
-    id: '2',
-    name: 'Temperature',
-    current: '24.5°C',
-    average: '23.8°C',
-    max: '28.2°C',
-    min: '19.5°C',
-    trend: 'Down',
-    color: '#0dcaf0'
-  },
-  {
-    id: '3',
-    name: 'Humidity',
-    current: '45%',
-    average: '42%',
-    max: '52%',
-    min: '38%',
-    trend: 'Up',
-    color: '#198754'
-  },
-  {
-    id: '4',
-    name: 'Network Bandwidth',
-    current: '5.2 Tbps',
-    average: '4.8 Tbps',
-    max: '6.1 Tbps',
-    min: '3.9 Tbps',
-    trend: 'Stable',
-    color: '#0d6efd'
-  },
-  {
-    id: '5',
-    name: 'Rack Utilization',
-    current: '82%',
-    average: '78%',
-    max: '91%',
-    min: '72%',
-    trend: 'Up',
-    color: '#6c757d'
-  }
-]
-
-const detailedSummary: SummaryMetric[] = [
-  { id: '1', name: 'Infrastructure Health', percentage: 92, color: '#198754' },
-  { id: '2', name: 'Capacity Headroom', percentage: 68, color: '#0dcaf0' },
-  { id: '3', name: 'Compliance Score', percentage: 95, color: '#0d6efd' }
-]
-
-const getStatusBadgeClass = (status: string): string => {
-  const classes = 'badge'
-  switch (status) {
-    case 'success':
-      return `${classes} bg-success`
-    case 'warning':
-      return `${classes} bg-warning text-dark`
-    case 'info':
-      return `${classes} bg-info`
-    default:
-      return `${classes} bg-secondary`
+async function save() {
+  saving.value = true
+  try {
+    if (editing.value) await reportMetricsApi.update(editing.value.id, form.value)
+    else await reportMetricsApi.create(form.value)
+    showModal.value = false
+    await loadData()
+  } finally {
+    saving.value = false
   }
 }
 
-const getTrendBadgeClass = (trend: string): string => {
+async function remove(id: number) {
+  if (!confirm('Are you sure?')) return
+  await reportMetricsApi.remove(id)
+  await loadData()
+}
+
+async function loadData() {
+  allMetrics.value = await reportMetricsApi.getAll()
+}
+
+onMounted(async () => {
+  try {
+    await loadData()
+  } finally {
+    loading.value = false
+  }
+})
+
+const conciseMetrics = computed(() => allMetrics.value.filter(m => m.category === 'concise'))
+const conciseStatus = computed(() => allMetrics.value.filter(m => m.category === 'concise-status'))
+const detailedMetrics = computed(() => allMetrics.value.filter(m => m.category === 'detailed'))
+const summaryMetrics = computed(() => allMetrics.value.filter(m => m.category === 'summary'))
+
+const getStatusBadgeClass = (color: string): string => {
   const classes = 'badge'
-  switch (trend) {
-    case 'Up':
-      return `${classes} bg-danger`
-    case 'Down':
+  switch (color) {
+    case 'success':
+    case '#198754':
       return `${classes} bg-success`
-    case 'Stable':
+    case 'warning':
+    case '#ffc107':
+      return `${classes} bg-warning text-dark`
+    case 'info':
+    case '#0dcaf0':
       return `${classes} bg-info`
     default:
       return `${classes} bg-secondary`

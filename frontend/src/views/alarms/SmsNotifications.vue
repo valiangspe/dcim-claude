@@ -1,8 +1,10 @@
 <template>
   <div class="container-fluid">
+    <div v-if="loading" class="text-center py-5"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>
+    <template v-else>
     <div class="d-flex justify-content-between align-items-center mb-4">
       <h1>SMS Notifications</h1>
-      <button class="btn btn-primary">+ Add Phone Number</button>
+      <button class="btn btn-primary" @click="openCreate">+ Add Phone Number</button>
     </div>
 
     <!-- SMS Recipients Table -->
@@ -42,8 +44,8 @@
                 </div>
               </td>
               <td>
-                <button class="btn btn-sm btn-outline-primary me-1">Edit</button>
-                <button class="btn btn-sm btn-outline-danger">Delete</button>
+                <button class="btn btn-sm btn-outline-primary me-1" @click="openEdit(recipient)">Edit</button>
+                <button class="btn btn-sm btn-outline-danger" @click="remove(recipient.id)">Delete</button>
               </td>
             </tr>
           </tbody>
@@ -122,50 +124,100 @@
         <button class="btn btn-primary">Save Settings</button>
       </div>
     </div>
+    </template>
+
+    <!-- Modal -->
+    <div v-if="showModal" class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">{{ editing ? 'Edit' : 'Add' }} SMS Recipient</h5>
+            <button type="button" class="btn-close" @click="showModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">Name</label>
+              <input v-model="form.name" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Phone</label>
+              <input v-model="form.phone" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Severity</label>
+              <select v-model="form.severity" class="form-select">
+                <option value="Critical">Critical</option>
+                <option value="High">High</option>
+                <option value="Medium">Medium</option>
+                <option value="Low">Low</option>
+              </select>
+            </div>
+            <div class="mb-3 form-check">
+              <input v-model="form.enabled" type="checkbox" class="form-check-input" id="formEnabled" />
+              <label class="form-check-label" for="formEnabled">Enabled</label>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showModal = false">Cancel</button>
+            <button class="btn btn-primary" @click="save" :disabled="saving">
+              <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
+import { smsRecipientsApi, type SmsRecipient } from '../../services/api'
 
-interface SmsRecipient {
-  id: number
-  name: string
-  phone: string
-  severity: string
-  enabled: boolean
+const smsRecipients = ref<SmsRecipient[]>([])
+const loading = ref(true)
+
+const showModal = ref(false)
+const saving = ref(false)
+const editing = ref<SmsRecipient | null>(null)
+const defaultForm = { name: '', phone: '', severity: 'Critical', enabled: true }
+const form = ref({ ...defaultForm })
+
+async function loadData() {
+  smsRecipients.value = await smsRecipientsApi.getAll()
 }
 
-const smsRecipients: SmsRecipient[] = [
-  {
-    id: 1,
-    name: 'John Smith',
-    phone: '+1 (555) 123-4567',
-    severity: 'Critical',
-    enabled: true,
-  },
-  {
-    id: 2,
-    name: 'Jane Doe',
-    phone: '+1 (555) 987-6543',
-    severity: 'Critical, High',
-    enabled: true,
-  },
-  {
-    id: 3,
-    name: 'Mike Johnson',
-    phone: '+1 (555) 456-7890',
-    severity: 'Critical',
-    enabled: false,
-  },
-  {
-    id: 4,
-    name: 'Sarah Williams',
-    phone: '+1 (555) 321-0987',
-    severity: 'All',
-    enabled: true,
-  },
-]
+onMounted(async () => { try { await loadData() } finally { loading.value = false } })
+
+function openCreate() {
+  editing.value = null
+  form.value = { ...defaultForm }
+  showModal.value = true
+}
+
+function openEdit(recipient: SmsRecipient) {
+  editing.value = recipient
+  form.value = { name: recipient.name, phone: recipient.phone, severity: recipient.severity, enabled: recipient.enabled }
+  showModal.value = true
+}
+
+async function save() {
+  saving.value = true
+  try {
+    if (editing.value) await smsRecipientsApi.update(editing.value.id, form.value)
+    else await smsRecipientsApi.create(form.value)
+    showModal.value = false
+    await loadData()
+  } finally {
+    saving.value = false
+  }
+}
+
+async function remove(id: number) {
+  if (!confirm('Are you sure?')) return
+  await smsRecipientsApi.remove(id)
+  await loadData()
+}
 
 const smsSettings = reactive({
   enabled: true,

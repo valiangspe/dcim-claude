@@ -5,10 +5,16 @@
         <h1 class="h3 mb-0">BMS/SCADA Integrations</h1>
       </div>
       <div class="col-auto">
-        <button class="btn btn-primary btn-sm">+ Add Integration</button>
+        <button class="btn btn-primary btn-sm" @click="openCreate">+ Add Integration</button>
       </div>
     </div>
 
+    <div v-if="loading" class="text-center py-5">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+    </div>
+    <template v-else>
     <div class="card">
       <div class="card-body">
         <table class="table table-hover mb-0">
@@ -40,62 +46,99 @@
                 <span class="badge bg-light text-dark">{{ integration.metrics }}</span>
               </td>
               <td>
-                <button class="btn btn-sm btn-outline-secondary">Config</button>
+                <button class="btn btn-sm btn-outline-secondary me-1" @click="openEdit(integration)">Edit</button>
+                <button class="btn btn-sm btn-outline-danger" @click="remove(integration.id)">Delete</button>
               </td>
             </tr>
           </tbody>
         </table>
       </div>
     </div>
+    </template>
+
+    <!-- Modal -->
+    <div v-if="showModal" class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">{{ editing ? 'Edit' : 'Add' }} Integration</h5>
+            <button type="button" class="btn-close" @click="showModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3"><label class="form-label">Name</label><input v-model="form.name" type="text" class="form-control" /></div>
+            <div class="mb-3"><label class="form-label">Type</label><input v-model="form.type" type="text" class="form-control" /></div>
+            <div class="mb-3"><label class="form-label">Endpoint</label><input v-model="form.endpoint" type="text" class="form-control" /></div>
+            <div class="mb-3"><label class="form-label">Status</label><input v-model="form.status" type="text" class="form-control" /></div>
+            <div class="mb-3"><label class="form-label">Last Sync</label><input v-model="form.lastSync" type="text" class="form-control" /></div>
+            <div class="mb-3"><label class="form-label">Metrics</label><input v-model.number="form.metrics" type="number" class="form-control" /></div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showModal = false">Cancel</button>
+            <button class="btn btn-primary" @click="save" :disabled="saving">
+              <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-const integrations = [
-  {
-    id: 1,
-    name: 'Building Management System',
-    type: 'BMS',
-    endpoint: 'bms-primary.datacenter.local:9000',
-    status: 'Connected',
-    lastSync: '2026-02-20 14:35:12 UTC',
-    metrics: 47
-  },
-  {
-    id: 2,
-    name: 'HVAC Control System',
-    type: 'SCADA',
-    endpoint: 'hvac-scada-01.datacenter.local:502',
-    status: 'Connected',
-    lastSync: '2026-02-20 14:34:58 UTC',
-    metrics: 23
-  },
-  {
-    id: 3,
-    name: 'Power Distribution Unit',
-    type: 'MODBUS',
-    endpoint: '10.0.1.45:502',
-    status: 'Connected',
-    lastSync: '2026-02-20 14:35:05 UTC',
-    metrics: 156
-  },
-  {
-    id: 4,
-    name: 'Access Control System',
-    type: 'REST API',
-    endpoint: 'access.datacenter.local/api',
-    status: 'Syncing',
-    lastSync: '2026-02-20 14:35:00 UTC',
-    metrics: 12
-  },
-  {
-    id: 5,
-    name: 'Environmental Sensor Network',
-    type: 'MQTT',
-    endpoint: 'mqtt.datacenter.local:1883',
-    status: 'Connected',
-    lastSync: '2026-02-20 14:34:55 UTC',
-    metrics: 89
+import { ref, onMounted } from 'vue'
+import { integrationsApi, type Integration } from '../../services/api'
+
+const integrations = ref<Integration[]>([])
+const loading = ref(true)
+const showModal = ref(false)
+const editing = ref<Integration | null>(null)
+const saving = ref(false)
+
+const defaultForm = { name: '', type: '', endpoint: '', status: '', lastSync: '', metrics: 0 }
+const form = ref({ ...defaultForm })
+
+async function loadData() {
+  integrations.value = await integrationsApi.getAll()
+}
+
+onMounted(async () => {
+  try {
+    await loadData()
+  } finally {
+    loading.value = false
   }
-];
+})
+
+function openCreate() {
+  editing.value = null
+  form.value = { ...defaultForm }
+  showModal.value = true
+}
+
+function openEdit(item: Integration) {
+  editing.value = item
+  form.value = { name: item.name, type: item.type, endpoint: item.endpoint, status: item.status, lastSync: item.lastSync, metrics: item.metrics }
+  showModal.value = true
+}
+
+async function save() {
+  saving.value = true
+  try {
+    if (editing.value) {
+      await integrationsApi.update(editing.value.id, form.value)
+    } else {
+      await integrationsApi.create(form.value)
+    }
+    showModal.value = false
+    await loadData()
+  } finally {
+    saving.value = false
+  }
+}
+
+async function remove(id: number) {
+  if (!confirm('Are you sure you want to delete this integration?')) return
+  await integrationsApi.remove(id)
+  await loadData()
+}
 </script>

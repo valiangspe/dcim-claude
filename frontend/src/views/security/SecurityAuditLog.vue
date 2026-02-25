@@ -1,16 +1,51 @@
 <script setup lang="ts">
-const auditLogs = [
-  { id: 1, timestamp: '2026-02-20 15:45:23', user: 'admin-001', action: 'Login', resource: 'Security Dashboard', result: 'success', details: 'HTTPS from 192.168.1.100' },
-  { id: 2, timestamp: '2026-02-20 15:42:18', user: 'secmgr-001', action: 'IP Whitelist Added', resource: 'Firewall Policy', result: 'success', details: 'Added 203.0.113.50 to whitelist' },
-  { id: 3, timestamp: '2026-02-20 15:38:47', user: 'netadmin-001', action: 'VPN Session Started', resource: 'Network Access', result: 'success', details: 'VPN Gateway A - Duration: 0:15:22' },
-  { id: 4, timestamp: '2026-02-20 15:35:12', user: 'analyst-001', action: 'Report Generated', resource: 'Security Report', result: 'success', details: 'Threat Summary Report - Feb 2026' },
-  { id: 5, timestamp: '2026-02-20 15:30:54', user: 'admin-002', action: 'Role Modified', resource: 'Access Control', result: 'success', details: 'Security Analyst - Added "audit_read" permission' },
-  { id: 6, timestamp: '2026-02-20 15:25:33', user: 'unknown', action: 'Failed Login Attempt', resource: 'Security Dashboard', result: 'failed', details: 'Invalid credentials from 10.0.5.88' },
-  { id: 7, timestamp: '2026-02-20 15:20:18', user: 'secmgr-002', action: 'Policy Created', resource: 'Access Policy', result: 'success', details: 'New Data Center C Access Policy' },
-  { id: 8, timestamp: '2026-02-20 15:15:42', user: 'admin-001', action: 'Audit Settings Changed', resource: 'System Configuration', result: 'success', details: 'Retention: 90 days, Level: Full' },
-  { id: 9, timestamp: '2026-02-20 15:10:28', user: 'tech-001', action: 'Access Granted', resource: 'Server Room B', result: 'success', details: 'RFID Card - Access Duration: 2 hours' },
-  { id: 10, timestamp: '2026-02-20 15:05:11', user: 'analyst-001', action: 'Alert Acknowledged', resource: 'Security Alert', result: 'success', details: 'IDS Alert #4782 - Malware Signature Match' },
-]
+import { ref, onMounted } from 'vue'
+import { securityAuditsApi, type SecurityAudit } from '../../services/api'
+
+const auditLogs = ref<SecurityAudit[]>([])
+const loading = ref(true)
+
+const showModal = ref(false)
+const saving = ref(false)
+const editing = ref<SecurityAudit | null>(null)
+const defaultForm = { timestamp: '', user: '', action: '', resource: '', result: '', details: '' }
+const form = ref({ ...defaultForm })
+
+async function loadData() {
+  auditLogs.value = await securityAuditsApi.getAll()
+}
+
+onMounted(async () => { try { await loadData() } finally { loading.value = false } })
+
+function openCreate() {
+  editing.value = null
+  form.value = { ...defaultForm }
+  showModal.value = true
+}
+
+function openEdit(log: SecurityAudit) {
+  editing.value = log
+  form.value = { timestamp: log.timestamp, user: log.user, action: log.action, resource: log.resource, result: log.result, details: log.details }
+  showModal.value = true
+}
+
+async function save() {
+  saving.value = true
+  try {
+    if (editing.value) await securityAuditsApi.update(editing.value.id, form.value)
+    else await securityAuditsApi.create(form.value)
+    showModal.value = false
+    await loadData()
+  } finally {
+    saving.value = false
+  }
+}
+
+async function remove(id: number) {
+  if (!confirm('Are you sure?')) return
+  await securityAuditsApi.remove(id)
+  await loadData()
+}
 
 const resultColor = {
   success: 'success',
@@ -34,6 +69,9 @@ const actionColor = {
 <template>
   <div>
     <h4 class="mb-4">Security Audit Log</h4>
+
+    <div v-if="loading" class="text-center py-5"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>
+    <template v-else>
 
     <!-- Filter and Stats -->
     <div class="row g-3 mb-4">
@@ -73,9 +111,12 @@ const actionColor = {
 
     <!-- Audit Log Table -->
     <div class="card border-0 shadow-sm">
-      <div class="card-header bg-transparent fw-semibold d-flex align-items-center">
-        <span>Audit Log Events</span>
-        <span class="badge bg-primary ms-2">{{ auditLogs.length }}</span>
+      <div class="card-header bg-transparent fw-semibold d-flex align-items-center justify-content-between">
+        <div class="d-flex align-items-center">
+          <span>Audit Log Events</span>
+          <span class="badge bg-primary ms-2">{{ auditLogs.length }}</span>
+        </div>
+        <button class="btn btn-sm btn-primary" @click="openCreate">+ Add Entry</button>
       </div>
       <div class="card-body p-0">
         <div class="table-responsive">
@@ -88,6 +129,7 @@ const actionColor = {
                 <th>Resource</th>
                 <th>Result</th>
                 <th>Details</th>
+                <th style="width:120px">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -104,9 +146,62 @@ const actionColor = {
                 <td style="max-width: 250px;">
                   <small class="text-muted" title="log.details">{{ log.details }}</small>
                 </td>
+                <td>
+                  <button class="btn btn-sm btn-outline-primary me-1" @click="openEdit(log)">Edit</button>
+                  <button class="btn btn-sm btn-outline-danger" @click="remove(log.id)">Delete</button>
+                </td>
               </tr>
             </tbody>
           </table>
+        </div>
+      </div>
+    </div>
+    </template>
+
+    <!-- Modal -->
+    <div v-if="showModal" class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">{{ editing ? 'Edit' : 'Add' }} Audit Entry</h5>
+            <button type="button" class="btn-close" @click="showModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">Timestamp</label>
+              <input v-model="form.timestamp" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">User</label>
+              <input v-model="form.user" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Action</label>
+              <input v-model="form.action" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Resource</label>
+              <input v-model="form.resource" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Result</label>
+              <select v-model="form.result" class="form-select">
+                <option value="success">success</option>
+                <option value="failed">failed</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Details</label>
+              <input v-model="form.details" type="text" class="form-control" />
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showModal = false">Cancel</button>
+            <button class="btn btn-primary" @click="save" :disabled="saving">
+              <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>
+              Save
+            </button>
+          </div>
         </div>
       </div>
     </div>

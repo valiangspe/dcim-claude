@@ -1,6 +1,9 @@
 <template>
   <div class="container-fluid py-4">
-    <h1 class="h3 mb-4">Temperature Heatmap</h1>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h1 class="h3 mb-0">Temperature Heatmap</h1>
+      <button class="btn btn-primary btn-sm" @click="openCreate">+ Add Data Point</button>
+    </div>
 
     <div class="row mb-3">
       <div class="col-auto">
@@ -12,6 +15,12 @@
       </div>
     </div>
 
+    <div v-if="loading" class="text-center py-5">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+    </div>
+    <template v-else>
     <div class="card">
       <div class="card-body">
         <div class="table-responsive">
@@ -27,9 +36,9 @@
             <tbody>
               <tr v-for="cabinet in cabinets" :key="cabinet">
                 <td class="fw-medium">{{ cabinet }}</td>
-                <td v-for="(temp, idx) in getTemperatureData(cabinet)" :key="idx"
-                    :style="{ backgroundColor: getTempColor(temp), color: 'white', textAlign: 'center', padding: '8px 0', fontWeight: 'bold' }">
-                  {{ temp }}°C
+                <td v-for="col in timeSlots" :key="col"
+                    :style="{ backgroundColor: getTempColor(getCell(cabinet, col)), color: 'white', textAlign: 'center', padding: '8px 0', fontWeight: 'bold' }">
+                  {{ getCell(cabinet, col) }}C
                 </td>
               </tr>
             </tbody>
@@ -40,13 +49,63 @@
         <div class="d-flex align-items-center gap-3">
           <span class="text-muted small">Temperature Scale:</span>
           <div style="width: 20px; height: 20px; background-color: rgb(0, 0, 255); border: 1px solid #ccc;"></div>
-          <span class="small">Cold (&lt;20°C)</span>
+          <span class="small">Cold (&lt;20C)</span>
           <div style="width: 20px; height: 20px; background-color: rgb(0, 200, 0); border: 1px solid #ccc;"></div>
-          <span class="small">Ideal (20-25°C)</span>
+          <span class="small">Ideal (20-25C)</span>
           <div style="width: 20px; height: 20px; background-color: rgb(255, 200, 0); border: 1px solid #ccc;"></div>
-          <span class="small">Warm (25-30°C)</span>
+          <span class="small">Warm (25-30C)</span>
           <div style="width: 20px; height: 20px; background-color: rgb(255, 0, 0); border: 1px solid #ccc;"></div>
-          <span class="small">Critical (&gt;30°C)</span>
+          <span class="small">Critical (&gt;30C)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mt-4">
+      <div class="card-header fw-semibold">Heatmap Data</div>
+      <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+          <thead class="table-light">
+            <tr><th>Category</th><th>Row Label</th><th>Col Label</th><th class="text-end">Value</th><th>Display Value</th><th>Actions</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in tempData" :key="item.id">
+              <td>{{ item.category }}</td>
+              <td class="fw-medium">{{ item.rowLabel }}</td>
+              <td>{{ item.colLabel }}</td>
+              <td class="text-end">{{ item.value }}</td>
+              <td>{{ item.displayValue }}</td>
+              <td>
+                <button class="btn btn-sm btn-outline-secondary me-1" @click="openEdit(item)">Edit</button>
+                <button class="btn btn-sm btn-outline-danger" @click="remove(item.id)">Delete</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    </template>
+
+    <!-- Modal -->
+    <div v-if="showModal" class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">{{ editing ? 'Edit' : 'Add' }} Heatmap Data</h5>
+            <button type="button" class="btn-close" @click="showModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3"><label class="form-label">Category</label><input v-model="form.category" type="text" class="form-control" /></div>
+            <div class="mb-3"><label class="form-label">Row Label</label><input v-model="form.rowLabel" type="text" class="form-control" /></div>
+            <div class="mb-3"><label class="form-label">Col Label</label><input v-model="form.colLabel" type="text" class="form-control" /></div>
+            <div class="mb-3"><label class="form-label">Value</label><input v-model.number="form.value" type="number" class="form-control" /></div>
+            <div class="mb-3"><label class="form-label">Display Value</label><input v-model="form.displayValue" type="text" class="form-control" /></div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showModal = false">Cancel</button>
+            <button class="btn btn-primary" @click="save" :disabled="saving">
+              <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>Save
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -54,31 +113,56 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed, onMounted } from 'vue'
+import { heatmapDataApi, type HeatmapData } from '../../services/api'
 
-const selectedTimeRange = ref('day');
+const selectedTimeRange = ref('day')
+const allData = ref<HeatmapData[]>([])
+const loading = ref(true)
+const showModal = ref(false)
+const editing = ref<HeatmapData | null>(null)
+const saving = ref(false)
 
-const cabinets = [
-  'CAB-A-01', 'CAB-A-02', 'CAB-A-03',
-  'CAB-B-01', 'CAB-B-02', 'CAB-B-03',
-  'CAB-C-01', 'CAB-C-02'
-];
+const defaultForm = { category: 'temperature', rowLabel: '', colLabel: '', value: 0, displayValue: '' }
+const form = ref({ ...defaultForm })
 
-const timeSlots = ['00:00', '06:00', '12:00', '18:00', '24:00'];
+async function loadData() {
+  allData.value = await heatmapDataApi.getAll()
+}
 
-const tempData: Record<string, number[]> = {
-  'CAB-A-01': [22.1, 22.5, 23.8, 23.2, 22.4],
-  'CAB-A-02': [23.2, 23.5, 24.1, 23.8, 23.1],
-  'CAB-A-03': [24.5, 25.1, 26.2, 25.8, 24.3],
-  'CAB-B-01': [21.8, 22.2, 23.5, 22.9, 21.6],
-  'CAB-B-02': [26.1, 27.2, 28.5, 27.8, 26.2],
-  'CAB-B-03': [28.9, 29.5, 31.2, 30.1, 28.5],
-  'CAB-C-01': [19.5, 20.1, 21.5, 20.8, 19.2],
-  'CAB-C-02': [20.2, 21.1, 22.8, 22.1, 20.5]
-};
+onMounted(async () => {
+  try {
+    await loadData()
+  } finally {
+    loading.value = false
+  }
+})
 
-function getTemperatureData(cabinet: string): number[] {
-  return tempData[cabinet] || [0, 0, 0, 0, 0];
+const tempData = computed(() => allData.value.filter(d => d.category === 'temperature'))
+
+const cabinets = computed(() => {
+  const set = new Set<string>()
+  tempData.value.forEach(d => set.add(d.rowLabel))
+  return Array.from(set).sort()
+})
+
+const timeSlots = computed(() => {
+  const set = new Set<string>()
+  tempData.value.forEach(d => set.add(d.colLabel))
+  return Array.from(set).sort()
+})
+
+const dataMap = computed(() => {
+  const map: Record<string, Record<string, number>> = {}
+  tempData.value.forEach(d => {
+    if (!map[d.rowLabel]) map[d.rowLabel] = {}
+    map[d.rowLabel][d.colLabel] = d.value
+  })
+  return map
+})
+
+function getCell(cabinet: string, col: string): number {
+  return dataMap.value[cabinet]?.[col] || 0
 }
 
 function getTempColor(temp: number): string {
@@ -86,5 +170,38 @@ function getTempColor(temp: number): string {
   if (temp < 25) return 'rgb(0, 200, 0)';
   if (temp < 30) return 'rgb(255, 200, 0)';
   return 'rgb(255, 0, 0)';
+}
+
+function openCreate() {
+  editing.value = null
+  form.value = { ...defaultForm }
+  showModal.value = true
+}
+
+function openEdit(item: HeatmapData) {
+  editing.value = item
+  form.value = { category: item.category, rowLabel: item.rowLabel, colLabel: item.colLabel, value: item.value, displayValue: item.displayValue }
+  showModal.value = true
+}
+
+async function save() {
+  saving.value = true
+  try {
+    if (editing.value) {
+      await heatmapDataApi.update(editing.value.id, form.value)
+    } else {
+      await heatmapDataApi.create(form.value)
+    }
+    showModal.value = false
+    await loadData()
+  } finally {
+    saving.value = false
+  }
+}
+
+async function remove(id: number) {
+  if (!confirm('Are you sure you want to delete this data point?')) return
+  await heatmapDataApi.remove(id)
+  await loadData()
 }
 </script>

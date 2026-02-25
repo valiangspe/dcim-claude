@@ -1,8 +1,10 @@
 <template>
   <div class="container-fluid">
+    <div v-if="loading" class="text-center py-5"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>
+    <template v-else>
     <div class="d-flex justify-content-between align-items-center mb-4">
       <h1>Maintenance Scheduling</h1>
-      <button class="btn btn-primary">+ Schedule Maintenance</button>
+      <button class="btn btn-primary" @click="openCreate">+ Schedule Maintenance</button>
     </div>
 
     <!-- Maintenance Windows Table -->
@@ -40,8 +42,8 @@
                 </span>
               </td>
               <td>
-                <button class="btn btn-sm btn-outline-primary me-1">Edit</button>
-                <button class="btn btn-sm btn-outline-danger">Cancel</button>
+                <button class="btn btn-sm btn-outline-primary me-1" @click="openEdit(maintenance)">Edit</button>
+                <button class="btn btn-sm btn-outline-danger" @click="remove(maintenance.id)">Delete</button>
               </td>
             </tr>
           </tbody>
@@ -142,63 +144,109 @@
     <div class="mt-4">
       <button class="btn btn-primary btn-lg">Save Policy Settings</button>
     </div>
+    </template>
+
+    <!-- Modal -->
+    <div v-if="showModal" class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">{{ editing ? 'Edit' : 'Add' }} Maintenance Window</h5>
+            <button type="button" class="btn-close" @click="showModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">Component</label>
+              <input v-model="form.component" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Start Time</label>
+              <input v-model="form.startTime" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">End Time</label>
+              <input v-model="form.endTime" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Impact</label>
+              <select v-model="form.impact" class="form-select">
+                <option value="Critical">Critical</option>
+                <option value="High">High</option>
+                <option value="Medium">Medium</option>
+                <option value="Low">Low</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Status</label>
+              <select v-model="form.status" class="form-select">
+                <option value="Scheduled">Scheduled</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Completed">Completed</option>
+                <option value="Cancelled">Cancelled</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showModal = false">Cancel</button>
+            <button class="btn btn-primary" @click="save" :disabled="saving">
+              <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
+import { maintenanceWindowsApi, type MaintenanceWindow } from '../../services/api'
 
-interface MaintenanceWindow {
-  id: number
-  component: string
-  startTime: Date
-  endTime: Date
-  impact: 'Critical' | 'High' | 'Medium' | 'Low'
-  status: 'Scheduled' | 'In Progress' | 'Completed' | 'Cancelled'
+const maintenanceWindows = ref<MaintenanceWindow[]>([])
+const loading = ref(true)
+
+const showModal = ref(false)
+const saving = ref(false)
+const editing = ref<MaintenanceWindow | null>(null)
+const defaultForm = { component: '', startTime: '', endTime: '', impact: 'Medium', status: 'Scheduled' }
+const form = ref({ ...defaultForm })
+
+async function loadData() {
+  maintenanceWindows.value = await maintenanceWindowsApi.getAll()
 }
 
-const maintenanceWindows: MaintenanceWindow[] = [
-  {
-    id: 1,
-    component: 'Cooling Unit A-01 Maintenance',
-    startTime: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
-    endTime: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000 + 4 * 60 * 60 * 1000),
-    impact: 'High',
-    status: 'Scheduled',
-  },
-  {
-    id: 2,
-    component: 'Network Switch D-02 Firmware Update',
-    startTime: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
-    endTime: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000 + 2 * 60 * 60 * 1000),
-    impact: 'Medium',
-    status: 'Scheduled',
-  },
-  {
-    id: 3,
-    component: 'UPS Battery Replacement',
-    startTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-    endTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000 + 6 * 60 * 60 * 1000),
-    impact: 'Critical',
-    status: 'Scheduled',
-  },
-  {
-    id: 4,
-    component: 'Server Rack A Power Distribution Upgrade',
-    startTime: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-    endTime: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000 + 8 * 60 * 60 * 1000),
-    impact: 'High',
-    status: 'Completed',
-  },
-  {
-    id: 5,
-    component: 'HVAC Filter Replacement',
-    startTime: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
-    endTime: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000 + 1 * 60 * 60 * 1000),
-    impact: 'Low',
-    status: 'Completed',
-  },
-]
+onMounted(async () => { try { await loadData() } finally { loading.value = false } })
+
+function openCreate() {
+  editing.value = null
+  form.value = { ...defaultForm }
+  showModal.value = true
+}
+
+function openEdit(maintenance: MaintenanceWindow) {
+  editing.value = maintenance
+  form.value = { component: maintenance.component, startTime: maintenance.startTime, endTime: maintenance.endTime, impact: maintenance.impact, status: maintenance.status }
+  showModal.value = true
+}
+
+async function save() {
+  saving.value = true
+  try {
+    if (editing.value) await maintenanceWindowsApi.update(editing.value.id, form.value)
+    else await maintenanceWindowsApi.create(form.value)
+    showModal.value = false
+    await loadData()
+  } finally {
+    saving.value = false
+  }
+}
+
+async function remove(id: number) {
+  if (!confirm('Are you sure?')) return
+  await maintenanceWindowsApi.remove(id)
+  await loadData()
+}
 
 const maintenancePolicy = reactive({
   suppressAlarms: true,
@@ -209,8 +257,9 @@ const maintenancePolicy = reactive({
   recipients: 'ops-team@company.com, manager@company.com',
 })
 
-function formatDateTime(date: Date): string {
-  return date.toLocaleString('en-US', {
+function formatDateTime(date: string | Date): string {
+  const d = typeof date === 'string' ? new Date(date) : date
+  return d.toLocaleString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -219,8 +268,10 @@ function formatDateTime(date: Date): string {
   })
 }
 
-function calculateDuration(start: Date, end: Date): string {
-  const diffMs = end.getTime() - start.getTime()
+function calculateDuration(start: string | Date, end: string | Date): string {
+  const s = typeof start === 'string' ? new Date(start) : start
+  const e = typeof end === 'string' ? new Date(end) : end
+  const diffMs = e.getTime() - s.getTime()
   const diffMins = Math.floor(diffMs / 60000)
   const diffHours = Math.floor(diffMins / 60)
 

@@ -1,14 +1,51 @@
 <script setup lang="ts">
-const accessLogs = [
-  { id: 1, timestamp: '2026-02-20 15:42:18', door: 'Data Center A - Main Entrance', person: 'John Smith', method: 'RFID', result: 'allowed' },
-  { id: 2, timestamp: '2026-02-20 15:38:52', door: 'Server Room B1', person: 'Sarah Johnson', method: 'Fingerprint', result: 'allowed' },
-  { id: 3, timestamp: '2026-02-20 15:35:11', door: 'Network Hub C', person: 'Mike Chen', method: 'RFID', result: 'allowed' },
-  { id: 4, timestamp: '2026-02-20 15:31:47', door: 'Secure Storage A', person: 'Unknown User', method: 'Card', result: 'denied' },
-  { id: 5, timestamp: '2026-02-20 15:28:23', door: 'Data Center A - Main Entrance', person: 'Emma Davis', method: 'Biometric', result: 'allowed' },
-  { id: 6, timestamp: '2026-02-20 15:24:09', door: 'UPS Room B', person: 'Robert Wilson', method: 'RFID', result: 'allowed' },
-  { id: 7, timestamp: '2026-02-20 15:19:34', door: 'Backup Vault', person: 'Lisa Anderson', method: 'Fingerprint', result: 'allowed' },
-  { id: 8, timestamp: '2026-02-20 15:15:08', door: 'Server Room B1', person: 'James Taylor', method: 'Card', result: 'denied' },
-]
+import { ref, onMounted } from 'vue'
+import { accessLogsApi, type AccessLog } from '../../services/api'
+
+const accessLogs = ref<AccessLog[]>([])
+const loading = ref(true)
+
+const showModal = ref(false)
+const saving = ref(false)
+const editing = ref<AccessLog | null>(null)
+const defaultForm = { timestamp: '', door: '', person: '', method: '', result: '' }
+const form = ref({ ...defaultForm })
+
+async function loadData() {
+  accessLogs.value = await accessLogsApi.getAll()
+}
+
+onMounted(async () => { try { await loadData() } finally { loading.value = false } })
+
+function openCreate() {
+  editing.value = null
+  form.value = { ...defaultForm }
+  showModal.value = true
+}
+
+function openEdit(log: AccessLog) {
+  editing.value = log
+  form.value = { timestamp: log.timestamp, door: log.door, person: log.person, method: log.method, result: log.result }
+  showModal.value = true
+}
+
+async function save() {
+  saving.value = true
+  try {
+    if (editing.value) await accessLogsApi.update(editing.value.id, form.value)
+    else await accessLogsApi.create(form.value)
+    showModal.value = false
+    await loadData()
+  } finally {
+    saving.value = false
+  }
+}
+
+async function remove(id: number) {
+  if (!confirm('Are you sure?')) return
+  await accessLogsApi.remove(id)
+  await loadData()
+}
 
 const resultBadge = {
   allowed: 'success',
@@ -26,6 +63,9 @@ const methodBadge = {
 <template>
   <div>
     <h4 class="mb-4">Physical Security</h4>
+
+    <div v-if="loading" class="text-center py-5"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>
+    <template v-else>
 
     <!-- Stats Row -->
     <div class="row g-3 mb-4">
@@ -65,7 +105,10 @@ const methodBadge = {
 
     <!-- Access Logs Table -->
     <div class="card border-0 shadow-sm">
-      <div class="card-header bg-transparent fw-semibold">Access Control Logs (Last 8 Events)</div>
+      <div class="card-header bg-transparent fw-semibold d-flex align-items-center justify-content-between">
+        <span>Access Control Logs (Last 8 Events)</span>
+        <button class="btn btn-sm btn-primary" @click="openCreate">+ Add Log</button>
+      </div>
       <div class="card-body p-0">
         <table class="table table-hover align-middle mb-0">
           <thead class="table-light">
@@ -75,6 +118,7 @@ const methodBadge = {
               <th>Person</th>
               <th>Method</th>
               <th>Result</th>
+              <th style="width:120px">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -84,9 +128,63 @@ const methodBadge = {
               <td>{{ log.person }}</td>
               <td><span class="badge" :class="`bg-${methodBadge[log.method as keyof typeof methodBadge]}`">{{ log.method }}</span></td>
               <td><span class="badge" :class="`bg-${resultBadge[log.result as keyof typeof resultBadge]}`">{{ log.result }}</span></td>
+              <td>
+                <button class="btn btn-sm btn-outline-primary me-1" @click="openEdit(log)">Edit</button>
+                <button class="btn btn-sm btn-outline-danger" @click="remove(log.id)">Delete</button>
+              </td>
             </tr>
           </tbody>
         </table>
+      </div>
+    </div>
+    </template>
+
+    <!-- Modal -->
+    <div v-if="showModal" class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">{{ editing ? 'Edit' : 'Add' }} Access Log</h5>
+            <button type="button" class="btn-close" @click="showModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">Timestamp</label>
+              <input v-model="form.timestamp" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Door / Location</label>
+              <input v-model="form.door" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Person</label>
+              <input v-model="form.person" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Method</label>
+              <select v-model="form.method" class="form-select">
+                <option value="RFID">RFID</option>
+                <option value="Fingerprint">Fingerprint</option>
+                <option value="Card">Card</option>
+                <option value="Biometric">Biometric</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Result</label>
+              <select v-model="form.result" class="form-select">
+                <option value="allowed">allowed</option>
+                <option value="denied">denied</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showModal = false">Cancel</button>
+            <button class="btn btn-primary" @click="save" :disabled="saving">
+              <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>
+              Save
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </div>

@@ -1,8 +1,10 @@
 <template>
   <div class="container-fluid">
+    <div v-if="loading" class="text-center py-5"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>
+    <template v-else>
     <div class="d-flex justify-content-between align-items-center mb-4">
       <h1>Escalation Policies</h1>
-      <button class="btn btn-primary">+ Create Policy</button>
+      <button class="btn btn-primary" @click="openCreate">+ Create Policy</button>
     </div>
 
     <!-- Escalation Policies List -->
@@ -38,8 +40,8 @@
             </div>
           </div>
           <div class="card-footer">
-            <button class="btn btn-sm btn-outline-primary me-1">Edit</button>
-            <button class="btn btn-sm btn-outline-danger">Delete</button>
+            <button class="btn btn-sm btn-outline-primary me-1" @click="openEdit(policy)">Edit</button>
+            <button class="btn btn-sm btn-outline-danger" @click="remove(policy.id)">Delete</button>
           </div>
         </div>
       </div>
@@ -96,11 +98,50 @@
         <button class="btn btn-primary">Save Settings</button>
       </div>
     </div>
+    </template>
+
+    <!-- Modal -->
+    <div v-if="showModal" class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">{{ editing ? 'Edit' : 'Add' }} Escalation Policy</h5>
+            <button type="button" class="btn-close" @click="showModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">Name</label>
+              <input v-model="form.name" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Description</label>
+              <input v-model="form.description" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Levels (JSON)</label>
+              <input v-model="form.levels" type="text" class="form-control" />
+            </div>
+            <div class="mb-3 form-check">
+              <input v-model="form.active" type="checkbox" class="form-check-input" id="formActive" />
+              <label class="form-check-label" for="formActive">Active</label>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showModal = false">Cancel</button>
+            <button class="btn btn-primary" @click="save" :disabled="saving">
+              <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
+import { escalationPoliciesApi, type EscalationPolicy } from '../../services/api'
 
 interface EscalationLevel {
   contact: string
@@ -108,93 +149,58 @@ interface EscalationLevel {
   method: string
 }
 
-interface EscalationPolicy {
-  id: number
-  name: string
-  description: string
-  active: boolean
+interface DisplayPolicy extends EscalationPolicy {
   escalationLevels: EscalationLevel[]
 }
 
-const escalationPolicies: EscalationPolicy[] = [
-  {
-    id: 1,
-    name: 'Critical - Immediate',
-    description: 'For critical infrastructure failures',
-    active: true,
-    escalationLevels: [
-      {
-        contact: 'On-Duty Operations Engineer',
-        waitTime: 'Immediate',
-        method: 'SMS + Email + Push',
-      },
-      {
-        contact: 'Operations Manager',
-        waitTime: '5 minutes',
-        method: 'Call + SMS',
-      },
-      {
-        contact: 'Director of Infrastructure',
-        waitTime: '15 minutes',
-        method: 'Call + Email',
-      },
-    ],
-  },
-  {
-    id: 2,
-    name: 'High Priority - Delayed',
-    description: 'For high severity issues with grace period',
-    active: true,
-    escalationLevels: [
-      {
-        contact: 'Operations Team Lead',
-        waitTime: '5 minutes',
-        method: 'Email + Push',
-      },
-      {
-        contact: 'Senior Operations Engineer',
-        waitTime: '15 minutes',
-        method: 'SMS + Email',
-      },
-      {
-        contact: 'Operations Manager',
-        waitTime: '30 minutes',
-        method: 'Call',
-      },
-    ],
-  },
-  {
-    id: 3,
-    name: 'Medium Priority - Business Hours',
-    description: 'For medium severity alerts during business hours only',
-    active: true,
-    escalationLevels: [
-      {
-        contact: 'Operations Team',
-        waitTime: '15 minutes',
-        method: 'Email',
-      },
-      {
-        contact: 'Technical Lead',
-        waitTime: '30 minutes',
-        method: 'Email + Chat',
-      },
-    ],
-  },
-  {
-    id: 4,
-    name: 'Low Priority - Daily Summary',
-    description: 'For low severity alerts and maintenance notifications',
-    active: false,
-    escalationLevels: [
-      {
-        contact: 'Operations Manager',
-        waitTime: '24 hours',
-        method: 'Daily Email Digest',
-      },
-    ],
-  },
-]
+const escalationPolicies = ref<DisplayPolicy[]>([])
+const loading = ref(true)
+
+const showModal = ref(false)
+const saving = ref(false)
+const editing = ref<DisplayPolicy | null>(null)
+const defaultForm = { name: '', description: '', levels: '', active: true }
+const form = ref({ ...defaultForm })
+
+async function loadData() {
+  const data = await escalationPoliciesApi.getAll()
+  escalationPolicies.value = data.map(p => ({
+    ...p,
+    escalationLevels: typeof p.levels === 'string' ? JSON.parse(p.levels) : [],
+  }))
+}
+
+onMounted(async () => { try { await loadData() } finally { loading.value = false } })
+
+function openCreate() {
+  editing.value = null
+  form.value = { ...defaultForm }
+  showModal.value = true
+}
+
+function openEdit(policy: DisplayPolicy) {
+  editing.value = policy
+  form.value = { name: policy.name, description: policy.description, levels: policy.levels, active: policy.active }
+  showModal.value = true
+}
+
+async function save() {
+  saving.value = true
+  try {
+    if (editing.value) await escalationPoliciesApi.update(editing.value.id, form.value)
+    else await escalationPoliciesApi.create(form.value)
+    showModal.value = false
+    await loadData()
+  } finally {
+    saving.value = false
+  }
+}
+
+async function remove(id: number) {
+  if (!confirm('Are you sure?')) return
+  await escalationPoliciesApi.remove(id)
+  await loadData()
+}
 
 const defaultSettings = reactive({
   criticalPolicy: 'immediate',

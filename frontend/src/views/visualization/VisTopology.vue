@@ -1,6 +1,9 @@
 <template>
   <div class="container-fluid py-4">
-    <h1 class="h3 mb-4">Network Topology</h1>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h1 class="h3 mb-0">Network Topology</h1>
+      <button class="btn btn-primary btn-sm" @click="openCreate">+ Add Device</button>
+    </div>
 
     <div class="row mb-3">
       <div class="col-auto">
@@ -12,6 +15,12 @@
       </div>
     </div>
 
+    <div v-if="loading" class="text-center py-5">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+    </div>
+    <template v-else>
     <div class="card">
       <div class="card-body" style="background-color: #f8f9fa; min-height: 500px; position: relative;">
         <div class="topology-layer" style="margin-bottom: 40px;">
@@ -84,50 +93,129 @@
         </table>
       </div>
     </div>
+
+    <div class="card mt-4">
+      <div class="card-header fw-semibold">Network Devices</div>
+      <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+          <thead class="table-light">
+            <tr><th>Name</th><th>Status</th><th>Type</th><th>Layer</th><th>Actions</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="device in allDevices" :key="device.id">
+              <td class="fw-medium">{{ device.name }}</td>
+              <td><span :class="['badge', device.status === 'UP' ? 'bg-success' : device.status === 'DOWN' ? 'bg-danger' : 'bg-warning']">{{ device.status }}</span></td>
+              <td>{{ device.type }}</td>
+              <td>{{ device.layer }}</td>
+              <td>
+                <button class="btn btn-sm btn-outline-secondary me-1" @click="openEdit(device)">Edit</button>
+                <button class="btn btn-sm btn-outline-danger" @click="remove(device.id)">Delete</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    </template>
+
+    <!-- Modal -->
+    <div v-if="showModal" class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">{{ editing ? 'Edit' : 'Add' }} Network Device</h5>
+            <button type="button" class="btn-close" @click="showModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3"><label class="form-label">Name</label><input v-model="form.name" type="text" class="form-control" /></div>
+            <div class="mb-3"><label class="form-label">Status</label><input v-model="form.status" type="text" class="form-control" /></div>
+            <div class="mb-3"><label class="form-label">Type</label><input v-model="form.type" type="text" class="form-control" /></div>
+            <div class="mb-3"><label class="form-label">Layer</label><input v-model="form.layer" type="text" class="form-control" /></div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showModal = false">Cancel</button>
+            <button class="btn btn-primary" @click="save" :disabled="saving">
+              <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed, onMounted } from 'vue'
+import { networkDevicesApi, type NetworkDevice, visLinksApi, type VisLink } from '../../services/api'
 
-const selectedView = ref('all');
+const selectedView = ref('all')
+const allDevices = ref<NetworkDevice[]>([])
+const links = ref<VisLink[]>([])
+const loading = ref(true)
+const showModal = ref(false)
+const editing = ref<NetworkDevice | null>(null)
+const saving = ref(false)
 
-const coreDevices = [
-  { id: 1, name: 'CORE-01', status: 'UP', type: 'core' },
-  { id: 2, name: 'CORE-02', status: 'UP', type: 'core' }
-];
+const defaultForm = { name: '', status: '', type: '', layer: '' }
+const form = ref({ ...defaultForm })
 
-const distDevices = [
-  { id: 3, name: 'DIST-01', status: 'UP', type: 'dist' },
-  { id: 4, name: 'DIST-02', status: 'UP', type: 'dist' },
-  { id: 5, name: 'DIST-03', status: 'UP', type: 'dist' },
-  { id: 6, name: 'DIST-04', status: 'DOWN', type: 'dist' }
-];
+async function loadData() {
+  const [devices, linksData] = await Promise.all([
+    networkDevicesApi.getAll(),
+    visLinksApi.getAll()
+  ])
+  allDevices.value = devices
+  links.value = linksData
+}
 
-const accessDevices = [
-  { id: 7, name: 'ACC-01', status: 'UP', type: 'access' },
-  { id: 8, name: 'ACC-02', status: 'UP', type: 'access' },
-  { id: 9, name: 'ACC-03', status: 'UP', type: 'access' },
-  { id: 10, name: 'ACC-04', status: 'UP', type: 'access' },
-  { id: 11, name: 'ACC-05', status: 'UP', type: 'access' },
-  { id: 12, name: 'ACC-06', status: 'UP', type: 'access' },
-  { id: 13, name: 'ACC-07', status: 'UP', type: 'access' },
-  { id: 14, name: 'ACC-08', status: 'UP', type: 'access' }
-];
+onMounted(async () => {
+  try {
+    await loadData()
+  } finally {
+    loading.value = false
+  }
+})
 
-const links = [
-  { id: 1, source: 'CORE-01', destination: 'CORE-02', status: 'Up', utilization: 45, speed: '100 Gbps' },
-  { id: 2, source: 'CORE-01', destination: 'DIST-01', status: 'Up', utilization: 62, speed: '100 Gbps' },
-  { id: 3, source: 'CORE-01', destination: 'DIST-02', status: 'Up', utilization: 58, speed: '100 Gbps' },
-  { id: 4, source: 'CORE-02', destination: 'DIST-03', status: 'Up', utilization: 71, speed: '100 Gbps' },
-  { id: 5, source: 'CORE-02', destination: 'DIST-04', status: 'Down', utilization: 0, speed: '100 Gbps' },
-  { id: 6, source: 'DIST-01', destination: 'ACC-01', status: 'Up', utilization: 35, speed: '40 Gbps' },
-  { id: 7, source: 'DIST-02', destination: 'ACC-02', status: 'Up', utilization: 42, speed: '40 Gbps' }
-];
+const coreDevices = computed(() => allDevices.value.filter(d => d.layer === 'core'))
+const distDevices = computed(() => allDevices.value.filter(d => d.layer === 'distribution'))
+const accessDevices = computed(() => allDevices.value.filter(d => d.layer === 'access'))
 
 function getNodeClass(device: { status: string }): string {
   if (device.status === 'UP') return 'bg-success';
   if (device.status === 'DOWN') return 'bg-danger';
   return 'bg-warning';
+}
+
+function openCreate() {
+  editing.value = null
+  form.value = { ...defaultForm }
+  showModal.value = true
+}
+
+function openEdit(item: NetworkDevice) {
+  editing.value = item
+  form.value = { name: item.name, status: item.status, type: item.type, layer: item.layer }
+  showModal.value = true
+}
+
+async function save() {
+  saving.value = true
+  try {
+    if (editing.value) {
+      await networkDevicesApi.update(editing.value.id, form.value)
+    } else {
+      await networkDevicesApi.create(form.value)
+    }
+    showModal.value = false
+    await loadData()
+  } finally {
+    saving.value = false
+  }
+}
+
+async function remove(id: number) {
+  if (!confirm('Are you sure you want to delete this device?')) return
+  await networkDevicesApi.remove(id)
+  await loadData()
 }
 </script>

@@ -2,125 +2,188 @@
   <div class="sustainability">
     <h2 class="mb-4">Sustainability Metrics</h2>
 
-    <!-- Key Metrics Cards -->
-    <div class="row mb-4">
-      <div class="col-md-6">
-        <div class="card">
-          <div class="card-body">
-            <h5 class="card-title">Renewable Energy</h5>
-            <div class="display-4 text-success">34%</div>
-            <p class="text-muted">Of total energy consumption</p>
-            <div class="progress" style="height: 20px">
-              <div class="progress-bar bg-success" role="progressbar" style="width: 34%" aria-valuenow="34" aria-valuemin="0" aria-valuemax="100"></div>
+    <div v-if="loading" class="text-center py-5">
+      <div class="spinner-border" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+    </div>
+
+    <template v-else>
+      <!-- Key Metrics Cards -->
+      <div class="row mb-4">
+        <div v-for="m in metrics.slice(0, 2)" :key="m.id" class="col-md-6">
+          <div class="card">
+            <div class="card-body">
+              <h5 class="card-title">{{ m.name }}</h5>
+              <div class="display-4" :class="m.status === 'on-track' ? 'text-success' : m.status === 'warning' ? 'text-warning' : 'text-info'">{{ m.value }} {{ m.unit }}</div>
+              <p class="text-muted">Target: {{ m.target }}</p>
+              <span class="badge" :class="m.status === 'on-track' ? 'bg-success' : m.status === 'warning' ? 'bg-warning text-dark' : 'bg-info'">{{ m.status }}</span>
             </div>
           </div>
         </div>
       </div>
-      <div class="col-md-6">
-        <div class="card">
-          <div class="card-body">
-            <h5 class="card-title">PUE (Power Usage Effectiveness)</h5>
-            <div class="display-4 text-info">1.47</div>
-            <p class="text-muted">Lower is better (industry avg: 1.58)</p>
-            <small class="text-success">↓ 0.05 improvement</small>
-          </div>
-        </div>
-      </div>
-    </div>
 
-    <!-- Additional Metrics -->
-    <div class="row mb-4">
-      <div class="col-md-4">
-        <div class="card">
-          <div class="card-body">
-            <h5 class="card-title">WUE</h5>
-            <div class="display-5 text-primary">0.89</div>
-            <p class="text-muted">L/kWh (Water Usage)</p>
+      <!-- Additional Metrics -->
+      <div class="row mb-4">
+        <div v-for="m in metrics.slice(2)" :key="m.id" class="col-md-4">
+          <div class="card">
+            <div class="card-body">
+              <h5 class="card-title">{{ m.name }}</h5>
+              <div class="display-5" :class="m.status === 'on-track' ? 'text-success' : m.status === 'warning' ? 'text-warning' : 'text-primary'">{{ m.value }} {{ m.unit }}</div>
+              <p class="text-muted">Target: {{ m.target }}</p>
+              <span class="badge" :class="m.status === 'on-track' ? 'bg-success' : m.status === 'warning' ? 'bg-warning text-dark' : 'bg-info'">{{ m.status }}</span>
+            </div>
           </div>
         </div>
       </div>
-      <div class="col-md-4">
-        <div class="card">
-          <div class="card-body">
-            <h5 class="card-title">Carbon Intensity</h5>
-            <div class="display-5 text-warning">78</div>
-            <p class="text-muted">gCO2e/kWh</p>
-          </div>
-        </div>
-      </div>
-      <div class="col-md-4">
-        <div class="card">
-          <div class="card-body">
-            <h5 class="card-title">Energy Efficiency</h5>
-            <div class="display-5 text-success">92%</div>
-            <p class="text-muted">IT equipment utilization</p>
-          </div>
-        </div>
-      </div>
-    </div>
 
-    <!-- Monthly Trend Chart -->
-    <div class="card">
-      <div class="card-header">
-        <h5 class="mb-0">Monthly Trend</h5>
+      <!-- Summary Table -->
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h5 class="mb-0">All Sustainability Metrics</h5>
+          <button class="btn btn-sm btn-primary" @click="openCreate">+ Add</button>
+        </div>
+        <div class="card-body">
+          <table class="table table-striped">
+            <thead>
+              <tr>
+                <th>Metric</th>
+                <th>Category</th>
+                <th>Value</th>
+                <th>Unit</th>
+                <th>Target</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="m in metrics" :key="m.id">
+                <td>{{ m.name }}</td>
+                <td>{{ m.category }}</td>
+                <td><strong>{{ m.value }}</strong></td>
+                <td>{{ m.unit }}</td>
+                <td>{{ m.target }}</td>
+                <td>
+                  <span class="badge" :class="m.status === 'on-track' ? 'bg-success' : m.status === 'warning' ? 'bg-warning text-dark' : 'bg-danger'">{{ m.status }}</span>
+                </td>
+                <td>
+                  <button class="btn btn-sm btn-outline-secondary me-1" @click="openEdit(m)">Edit</button>
+                  <button class="btn btn-sm btn-outline-danger" @click="remove(m.id)">Delete</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
-      <div class="card-body">
-        <table class="table table-striped">
-          <thead>
-            <tr>
-              <th>Month</th>
-              <th>Renewable %</th>
-              <th>PUE</th>
-              <th>WUE</th>
-              <th>Carbon (gCO2/kWh)</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>January</td>
-              <td>32%</td>
-              <td>1.52</td>
-              <td>0.92</td>
-              <td>82</td>
-            </tr>
-            <tr>
-              <td>February</td>
-              <td>33%</td>
-              <td>1.50</td>
-              <td>0.91</td>
-              <td>80</td>
-            </tr>
-            <tr>
-              <td>March</td>
-              <td>35%</td>
-              <td>1.48</td>
-              <td>0.89</td>
-              <td>76</td>
-            </tr>
-            <tr>
-              <td>April</td>
-              <td>36%</td>
-              <td>1.46</td>
-              <td>0.88</td>
-              <td>74</td>
-            </tr>
-            <tr>
-              <td>May</td>
-              <td>34%</td>
-              <td>1.47</td>
-              <td>0.89</td>
-              <td>78</td>
-            </tr>
-          </tbody>
-        </table>
+    </template>
+
+    <div v-if="showModal" class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">{{ editing ? 'Edit' : 'New' }} Metric</h5>
+            <button type="button" class="btn-close" @click="showModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">Category</label>
+              <input v-model="form.category" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Name</label>
+              <input v-model="form.name" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Value</label>
+              <input v-model="form.value" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Unit</label>
+              <input v-model="form.unit" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Target</label>
+              <input v-model="form.target" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Status</label>
+              <select v-model="form.status" class="form-select">
+                <option>on-track</option>
+                <option>warning</option>
+                <option>critical</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showModal = false">Cancel</button>
+            <button class="btn btn-primary" @click="save" :disabled="saving">
+              <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>
+              Save
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-// Mock data for Sustainability Metrics component
-// No imports needed
+import { ref, computed, onMounted } from 'vue'
+import { sustainabilityMetricsApi, type SustainabilityMetric } from '../../services/api'
+
+const allMetrics = ref<SustainabilityMetric[]>([])
+const loading = ref(true)
+const showModal = ref(false)
+const saving = ref(false)
+const editing = ref<SustainabilityMetric | null>(null)
+
+const PAGE = 'sustainability'
+const metrics = computed(() => allMetrics.value.filter(m => m.page === PAGE))
+
+const defaultForm = { category: '', name: '', value: '', unit: '', target: '', status: 'on-track', page: PAGE }
+const form = ref({ ...defaultForm })
+
+async function loadData() {
+  allMetrics.value = await sustainabilityMetricsApi.getAll()
+}
+
+onMounted(async () => {
+  try {
+    await loadData()
+  } finally {
+    loading.value = false
+  }
+})
+
+function openCreate() {
+  editing.value = null
+  form.value = { ...defaultForm }
+  showModal.value = true
+}
+
+function openEdit(m: SustainabilityMetric) {
+  editing.value = m
+  form.value = { category: m.category, name: m.name, value: m.value, unit: m.unit, target: m.target, status: m.status, page: PAGE }
+  showModal.value = true
+}
+
+async function save() {
+  saving.value = true
+  try {
+    if (editing.value) await sustainabilityMetricsApi.update(editing.value.id, form.value)
+    else await sustainabilityMetricsApi.create(form.value)
+    showModal.value = false
+    await loadData()
+  } finally {
+    saving.value = false
+  }
+}
+
+async function remove(id: number) {
+  if (!confirm('Are you sure?')) return
+  await sustainabilityMetricsApi.remove(id)
+  await loadData()
+}
 </script>
 
 <style scoped>

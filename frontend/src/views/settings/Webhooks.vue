@@ -5,10 +5,16 @@
         <h1 class="h3 mb-0">Webhooks</h1>
       </div>
       <div class="col-auto">
-        <button class="btn btn-primary btn-sm">+ Add Webhook</button>
+        <button class="btn btn-primary btn-sm" @click="openCreate">+ Add Webhook</button>
       </div>
     </div>
 
+    <div v-if="loading" class="text-center py-5">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+    </div>
+    <template v-else>
     <div class="card">
       <div class="card-body">
         <div class="table-responsive">
@@ -29,8 +35,8 @@
                 <td class="fw-medium">{{ webhook.name }}</td>
                 <td class="font-monospace small text-truncate" :title="webhook.url">{{ webhook.url }}</td>
                 <td>
-                  <span v-for="event in webhook.events" :key="event" class="badge bg-secondary me-1">
-                    {{ event }}
+                  <span v-for="event in webhook.events.split(',')" :key="event" class="badge bg-secondary me-1">
+                    {{ event.trim() }}
                   </span>
                 </td>
                 <td>
@@ -47,7 +53,8 @@
                   <span class="small">{{ webhook.deliveryRate }}%</span>
                 </td>
                 <td>
-                  <button class="btn btn-sm btn-outline-secondary">Edit</button>
+                  <button class="btn btn-sm btn-outline-secondary me-1" @click="openEdit(webhook)">Edit</button>
+                  <button class="btn btn-sm btn-outline-danger" @click="remove(webhook.id)">Delete</button>
                 </td>
               </tr>
             </tbody>
@@ -55,55 +62,91 @@
         </div>
       </div>
     </div>
+    </template>
+
+    <!-- Modal -->
+    <div v-if="showModal" class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">{{ editing ? 'Edit' : 'Add' }} Webhook</h5>
+            <button type="button" class="btn-close" @click="showModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3"><label class="form-label">Name</label><input v-model="form.name" type="text" class="form-control" /></div>
+            <div class="mb-3"><label class="form-label">URL</label><input v-model="form.url" type="text" class="form-control" /></div>
+            <div class="mb-3"><label class="form-label">Events</label><input v-model="form.events" type="text" class="form-control" /></div>
+            <div class="mb-3"><label class="form-label">Status</label><input v-model="form.status" type="text" class="form-control" /></div>
+            <div class="mb-3"><label class="form-label">Last Event</label><input v-model="form.lastEvent" type="text" class="form-control" /></div>
+            <div class="mb-3"><label class="form-label">Delivery Rate</label><input v-model.number="form.deliveryRate" type="number" class="form-control" /></div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showModal = false">Cancel</button>
+            <button class="btn btn-primary" @click="save" :disabled="saving">
+              <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-const webhooks = [
-  {
-    id: 1,
-    name: 'Slack Alerts',
-    url: 'https://hooks.slack.com/services/T0000000/B0000000/XXXXXXXXXXXX',
-    events: ['Alert', 'Alarm'],
-    status: 'Active',
-    lastEvent: '2026-02-20 14:32:15 UTC',
-    deliveryRate: 99.8
-  },
-  {
-    id: 2,
-    name: 'SIEM Integration',
-    url: 'https://siem.company.com/api/v2/events',
-    events: ['Security', 'Access', 'Config Change'],
-    status: 'Active',
-    lastEvent: '2026-02-20 14:35:10 UTC',
-    deliveryRate: 100
-  },
-  {
-    id: 3,
-    name: 'Email Notifications',
-    url: 'https://notification.datacenter.local/mail',
-    events: ['Critical', 'Alarm'],
-    status: 'Active',
-    lastEvent: '2026-02-20 14:20:45 UTC',
-    deliveryRate: 98.5
-  },
-  {
-    id: 4,
-    name: 'PagerDuty Incident',
-    url: 'https://events.pagerduty.com/v2/enqueue',
-    events: ['Critical', 'Emergency'],
-    status: 'Failing',
-    lastEvent: '2026-02-20 10:15:30 UTC',
-    deliveryRate: 87.3
-  },
-  {
-    id: 5,
-    name: 'Analytics Pipeline',
-    url: 'https://analytics.internal/events',
-    events: ['Metrics', 'Usage'],
-    status: 'Paused',
-    lastEvent: '2026-02-15 12:00:00 UTC',
-    deliveryRate: 0
+import { ref, onMounted } from 'vue'
+import { webhookConfigsApi, type WebhookConfig } from '../../services/api'
+
+const webhooks = ref<WebhookConfig[]>([])
+const loading = ref(true)
+const showModal = ref(false)
+const editing = ref<WebhookConfig | null>(null)
+const saving = ref(false)
+
+const defaultForm = { name: '', url: '', events: '', status: '', lastEvent: '', deliveryRate: 0 }
+const form = ref({ ...defaultForm })
+
+async function loadData() {
+  webhooks.value = await webhookConfigsApi.getAll()
+}
+
+onMounted(async () => {
+  try {
+    await loadData()
+  } finally {
+    loading.value = false
   }
-];
+})
+
+function openCreate() {
+  editing.value = null
+  form.value = { ...defaultForm }
+  showModal.value = true
+}
+
+function openEdit(item: WebhookConfig) {
+  editing.value = item
+  form.value = { name: item.name, url: item.url, events: item.events, status: item.status, lastEvent: item.lastEvent, deliveryRate: item.deliveryRate }
+  showModal.value = true
+}
+
+async function save() {
+  saving.value = true
+  try {
+    if (editing.value) {
+      await webhookConfigsApi.update(editing.value.id, form.value)
+    } else {
+      await webhookConfigsApi.create(form.value)
+    }
+    showModal.value = false
+    await loadData()
+  } finally {
+    saving.value = false
+  }
+}
+
+async function remove(id: number) {
+  if (!confirm('Are you sure you want to delete this webhook?')) return
+  await webhookConfigsApi.remove(id)
+  await loadData()
+}
 </script>

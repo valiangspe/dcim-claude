@@ -2,201 +2,110 @@
   <div class="energy-storage">
     <h2 class="mb-4">Energy Storage Systems</h2>
 
-    <!-- Summary Cards -->
-    <div class="row mb-4">
-      <div class="col-md-4">
-        <div class="card">
-          <div class="card-body">
-            <h5 class="card-title">Total Capacity</h5>
-            <div class="display-5 text-primary">8,500</div>
-            <p class="text-muted">kWh</p>
-          </div>
-        </div>
-      </div>
-      <div class="col-md-4">
-        <div class="card">
-          <div class="card-body">
-            <h5 class="card-title">Available Energy</h5>
-            <div class="display-5 text-success">6,835</div>
-            <p class="text-muted">kWh (80.4%)</p>
-          </div>
-        </div>
-      </div>
-      <div class="col-md-4">
-        <div class="card">
-          <div class="card-body">
-            <h5 class="card-title">Cycle Efficiency</h5>
-            <div class="display-5 text-info">91%</div>
-            <p class="text-muted">Round-trip efficiency</p>
-          </div>
-        </div>
+    <div v-if="loading" class="text-center py-5">
+      <div class="spinner-border" role="status">
+        <span class="visually-hidden">Loading...</span>
       </div>
     </div>
 
-    <!-- Storage Systems Table -->
-    <div class="card mb-4">
-      <div class="card-header">
-        <h5 class="mb-0">Storage Systems - Capacity & Status</h5>
-      </div>
-      <div class="card-body">
-        <table class="table table-striped">
-          <thead>
-            <tr>
-              <th>System</th>
-              <th>Type</th>
-              <th>Capacity (kWh)</th>
-              <th>SOC (%)</th>
-              <th>Status</th>
-              <th>Response Time</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Battery Pack A</td>
-              <td>Lithium-ion</td>
-              <td>3,000</td>
-              <td>
-                <div class="progress" style="height: 20px">
-                  <div class="progress-bar bg-success" role="progressbar" style="width: 85%" aria-valuenow="85" aria-valuemin="0" aria-valuemax="100"></div>
-                </div>
-                <small>85%</small>
-              </td>
-              <td><span class="badge bg-success">Ready</span></td>
-              <td>12ms</td>
-            </tr>
-            <tr>
-              <td>Battery Pack B</td>
-              <td>Lithium-ion</td>
-              <td>2,500</td>
-              <td>
-                <div class="progress" style="height: 20px">
-                  <div class="progress-bar bg-info" role="progressbar" style="width: 72%" aria-valuenow="72" aria-valuemin="0" aria-valuemax="100"></div>
-                </div>
-                <small>72%</small>
-              </td>
-              <td><span class="badge bg-success">Ready</span></td>
-              <td>15ms</td>
-            </tr>
-            <tr>
-              <td>Flywheel System 1</td>
-              <td>Mechanical</td>
-              <td>1,500</td>
-              <td>
-                <div class="progress" style="height: 20px">
-                  <div class="progress-bar bg-warning" role="progressbar" style="width: 92%" aria-valuenow="92" aria-valuemin="0" aria-valuemax="100"></div>
-                </div>
-                <small>92%</small>
-              </td>
-              <td><span class="badge bg-success">Ready</span></td>
-              <td>8ms</td>
-            </tr>
-            <tr>
-              <td>Flywheel System 2</td>
-              <td>Mechanical</td>
-              <td>1,500</td>
-              <td>
-                <div class="progress" style="height: 20px">
-                  <div class="progress-bar bg-warning" role="progressbar" style="width: 68%" aria-valuenow="68" aria-valuemin="0" aria-valuemax="100"></div>
-                </div>
-                <small>68%</small>
-              </td>
-              <td><span class="badge bg-warning">Charging</span></td>
-              <td>8ms</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- Performance Details -->
-    <div class="row">
-      <div class="col-md-6">
-        <div class="card">
-          <div class="card-header">
-            <h5 class="mb-0">Monthly Energy Discharged</h5>
-          </div>
-          <div class="card-body">
-            <table class="table table-sm">
-              <thead>
-                <tr>
-                  <th>Month</th>
-                  <th>Discharged (kWh)</th>
-                  <th>Cycles</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>January</td>
-                  <td>1,240</td>
-                  <td>3</td>
-                </tr>
-                <tr>
-                  <td>February</td>
-                  <td>985</td>
-                  <td>2</td>
-                </tr>
-                <tr>
-                  <td>March</td>
-                  <td>1,560</td>
-                  <td>4</td>
-                </tr>
-                <tr>
-                  <td>April</td>
-                  <td>2,140</td>
-                  <td>5</td>
-                </tr>
-                <tr>
-                  <td>May</td>
-                  <td>1,820</td>
-                  <td>4</td>
-                </tr>
-              </tbody>
-            </table>
+    <template v-else>
+      <!-- Summary Cards -->
+      <div class="row mb-4">
+        <div v-for="m in metrics.slice(0, 3)" :key="m.id" class="col-md-4">
+          <div class="card">
+            <div class="card-body">
+              <h5 class="card-title">{{ m.name }}</h5>
+              <div class="display-5" :class="m.status === 'on-track' ? 'text-success' : m.status === 'warning' ? 'text-warning' : 'text-primary'">{{ m.value }} {{ m.unit }}</div>
+              <p class="text-muted">Target: {{ m.target }}</p>
+              <span class="badge" :class="m.status === 'on-track' ? 'bg-success' : m.status === 'warning' ? 'bg-warning text-dark' : 'bg-info'">{{ m.status }}</span>
+            </div>
           </div>
         </div>
       </div>
-      <div class="col-md-6">
-        <div class="card">
-          <div class="card-header">
-            <h5 class="mb-0">Health & Maintenance</h5>
+
+      <!-- All Metrics Table -->
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h5 class="mb-0">Energy Storage Metrics</h5>
+          <button class="btn btn-sm btn-primary" @click="openCreate">+ Add</button>
+        </div>
+        <div class="card-body">
+          <table class="table table-striped">
+            <thead>
+              <tr>
+                <th>Metric</th>
+                <th>Category</th>
+                <th>Value</th>
+                <th>Unit</th>
+                <th>Target</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="m in metrics" :key="m.id">
+                <td>{{ m.name }}</td>
+                <td>{{ m.category }}</td>
+                <td><strong>{{ m.value }}</strong></td>
+                <td>{{ m.unit }}</td>
+                <td>{{ m.target }}</td>
+                <td>
+                  <span class="badge" :class="m.status === 'on-track' ? 'bg-success' : m.status === 'warning' ? 'bg-warning text-dark' : 'bg-danger'">{{ m.status }}</span>
+                </td>
+                <td>
+                  <button class="btn btn-sm btn-outline-secondary me-1" @click="openEdit(m)">Edit</button>
+                  <button class="btn btn-sm btn-outline-danger" @click="remove(m.id)">Delete</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </template>
+
+    <div v-if="showModal" class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">{{ editing ? 'Edit' : 'New' }} Metric</h5>
+            <button type="button" class="btn-close" @click="showModal = false"></button>
           </div>
-          <div class="card-body">
+          <div class="modal-body">
             <div class="mb-3">
-              <div class="d-flex justify-content-between mb-2">
-                <span>Battery Pack A - Health</span>
-                <strong>96%</strong>
-              </div>
-              <div class="progress" style="height: 20px">
-                <div class="progress-bar bg-success" role="progressbar" style="width: 96%" aria-valuenow="96" aria-valuemin="0" aria-valuemax="100"></div>
-              </div>
+              <label class="form-label">Category</label>
+              <input v-model="form.category" type="text" class="form-control" />
             </div>
             <div class="mb-3">
-              <div class="d-flex justify-content-between mb-2">
-                <span>Battery Pack B - Health</span>
-                <strong>89%</strong>
-              </div>
-              <div class="progress" style="height: 20px">
-                <div class="progress-bar bg-warning" role="progressbar" style="width: 89%" aria-valuenow="89" aria-valuemin="0" aria-valuemax="100"></div>
-              </div>
+              <label class="form-label">Name</label>
+              <input v-model="form.name" type="text" class="form-control" />
             </div>
             <div class="mb-3">
-              <div class="d-flex justify-content-between mb-2">
-                <span>Flywheel 1 - Health</span>
-                <strong>98%</strong>
-              </div>
-              <div class="progress" style="height: 20px">
-                <div class="progress-bar bg-success" role="progressbar" style="width: 98%" aria-valuenow="98" aria-valuemin="0" aria-valuemax="100"></div>
-              </div>
+              <label class="form-label">Value</label>
+              <input v-model="form.value" type="text" class="form-control" />
             </div>
-            <div>
-              <div class="d-flex justify-content-between mb-2">
-                <span>Flywheel 2 - Health</span>
-                <strong>94%</strong>
-              </div>
-              <div class="progress" style="height: 20px">
-                <div class="progress-bar bg-success" role="progressbar" style="width: 94%" aria-valuenow="94" aria-valuemin="0" aria-valuemax="100"></div>
-              </div>
+            <div class="mb-3">
+              <label class="form-label">Unit</label>
+              <input v-model="form.unit" type="text" class="form-control" />
             </div>
+            <div class="mb-3">
+              <label class="form-label">Target</label>
+              <input v-model="form.target" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Status</label>
+              <select v-model="form.status" class="form-select">
+                <option>on-track</option>
+                <option>warning</option>
+                <option>critical</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showModal = false">Cancel</button>
+            <button class="btn btn-primary" @click="save" :disabled="saving">
+              <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>
+              Save
+            </button>
           </div>
         </div>
       </div>
@@ -205,8 +114,62 @@
 </template>
 
 <script setup lang="ts">
-// Mock data for Energy Storage component
-// No imports needed
+import { ref, computed, onMounted } from 'vue'
+import { sustainabilityMetricsApi, type SustainabilityMetric } from '../../services/api'
+
+const allMetrics = ref<SustainabilityMetric[]>([])
+const loading = ref(true)
+const showModal = ref(false)
+const saving = ref(false)
+const editing = ref<SustainabilityMetric | null>(null)
+
+const PAGE = 'energy-storage'
+const metrics = computed(() => allMetrics.value.filter(m => m.page === PAGE))
+
+const defaultForm = { category: '', name: '', value: '', unit: '', target: '', status: 'on-track', page: PAGE }
+const form = ref({ ...defaultForm })
+
+async function loadData() {
+  allMetrics.value = await sustainabilityMetricsApi.getAll()
+}
+
+onMounted(async () => {
+  try {
+    await loadData()
+  } finally {
+    loading.value = false
+  }
+})
+
+function openCreate() {
+  editing.value = null
+  form.value = { ...defaultForm }
+  showModal.value = true
+}
+
+function openEdit(m: SustainabilityMetric) {
+  editing.value = m
+  form.value = { category: m.category, name: m.name, value: m.value, unit: m.unit, target: m.target, status: m.status, page: PAGE }
+  showModal.value = true
+}
+
+async function save() {
+  saving.value = true
+  try {
+    if (editing.value) await sustainabilityMetricsApi.update(editing.value.id, form.value)
+    else await sustainabilityMetricsApi.create(form.value)
+    showModal.value = false
+    await loadData()
+  } finally {
+    saving.value = false
+  }
+}
+
+async function remove(id: number) {
+  if (!confirm('Are you sure?')) return
+  await sustainabilityMetricsApi.remove(id)
+  await loadData()
+}
 </script>
 
 <style scoped>

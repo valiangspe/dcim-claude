@@ -1,8 +1,10 @@
 <template>
   <div class="container-fluid">
+    <div v-if="loading" class="text-center py-5"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>
+    <template v-else>
     <div class="d-flex justify-content-between align-items-center mb-4">
       <h1>Custom Alert Rules</h1>
-      <button class="btn btn-primary">+ Create Rule</button>
+      <button class="btn btn-primary" @click="openCreate">+ Create Rule</button>
     </div>
 
     <!-- Alert Rules Table -->
@@ -36,9 +38,8 @@
                 </span>
               </td>
               <td>
-                <button class="btn btn-sm btn-outline-primary me-1">Edit</button>
-                <button class="btn btn-sm btn-outline-warning me-1">Disable</button>
-                <button class="btn btn-sm btn-outline-danger">Delete</button>
+                <button class="btn btn-sm btn-outline-primary me-1" @click="openEdit(rule)">Edit</button>
+                <button class="btn btn-sm btn-outline-danger" @click="remove(rule.id)">Delete</button>
               </td>
             </tr>
           </tbody>
@@ -73,83 +74,97 @@
         </div>
       </div>
     </div>
+    </template>
+
+    <!-- Modal -->
+    <div v-if="showModal" class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">{{ editing ? 'Edit' : 'Add' }} Alert Rule</h5>
+            <button type="button" class="btn-close" @click="showModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">Name</label>
+              <input v-model="form.name" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Condition</label>
+              <input v-model="form.condition" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Threshold</label>
+              <input v-model="form.threshold" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Action</label>
+              <input v-model="form.action" type="text" class="form-control" />
+            </div>
+            <div class="mb-3 form-check">
+              <input v-model="form.enabled" type="checkbox" class="form-check-input" id="formEnabled" />
+              <label class="form-check-label" for="formEnabled">Enabled</label>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showModal = false">Cancel</button>
+            <button class="btn btn-primary" @click="save" :disabled="saving">
+              <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-interface AlertRule {
-  id: number
-  name: string
-  condition: string
-  threshold: string
-  action: string
-  enabled: boolean
+import { ref, onMounted } from 'vue'
+import { alertRulesApi, type AlertRule } from '../../services/api'
+
+const alertRules = ref<AlertRule[]>([])
+const loading = ref(true)
+
+const showModal = ref(false)
+const saving = ref(false)
+const editing = ref<AlertRule | null>(null)
+const defaultForm = { name: '', condition: '', threshold: '', action: '', enabled: true }
+const form = ref({ ...defaultForm })
+
+async function loadData() {
+  alertRules.value = await alertRulesApi.getAll()
 }
 
-const alertRules: AlertRule[] = [
-  {
-    id: 1,
-    name: 'High CPU Utilization',
-    condition: 'CPU > Threshold',
-    threshold: '85%',
-    action: 'Send Critical Alert',
-    enabled: true,
-  },
-  {
-    id: 2,
-    name: 'Temperature Alarm',
-    condition: 'Temperature > Threshold',
-    threshold: '40°C',
-    action: 'Send Critical Alert, Trigger Cooling',
-    enabled: true,
-  },
-  {
-    id: 3,
-    name: 'Memory Pressure',
-    condition: 'Memory Usage > Threshold',
-    threshold: '90%',
-    action: 'Send High Alert',
-    enabled: true,
-  },
-  {
-    id: 4,
-    name: 'Power Anomaly Detection',
-    condition: 'Power Deviation > Threshold',
-    threshold: '±20%',
-    action: 'Send High Alert, Notify Ops Team',
-    enabled: true,
-  },
-  {
-    id: 5,
-    name: 'Disk Space Low',
-    condition: 'Free Disk Space < Threshold',
-    threshold: '10%',
-    action: 'Send Medium Alert',
-    enabled: true,
-  },
-  {
-    id: 6,
-    name: 'Network Interface Down',
-    condition: 'Link Status = Down',
-    threshold: 'N/A',
-    action: 'Send Critical Alert, Escalate',
-    enabled: true,
-  },
-  {
-    id: 7,
-    name: 'UPS Battery Low',
-    condition: 'Battery Level < Threshold',
-    threshold: '25%',
-    action: 'Send High Alert',
-    enabled: false,
-  },
-  {
-    id: 8,
-    name: 'Consecutive Failed Health Checks',
-    condition: 'Failed Checks >= Count',
-    threshold: '3 consecutive',
-    action: 'Send Critical Alert',
-    enabled: true,
-  },
-]
+onMounted(async () => { try { await loadData() } finally { loading.value = false } })
+
+function openCreate() {
+  editing.value = null
+  form.value = { ...defaultForm }
+  showModal.value = true
+}
+
+function openEdit(rule: AlertRule) {
+  editing.value = rule
+  form.value = { name: rule.name, condition: rule.condition, threshold: rule.threshold, action: rule.action, enabled: rule.enabled }
+  showModal.value = true
+}
+
+async function save() {
+  saving.value = true
+  try {
+    if (editing.value) await alertRulesApi.update(editing.value.id, form.value)
+    else await alertRulesApi.create(form.value)
+    showModal.value = false
+    await loadData()
+  } finally {
+    saving.value = false
+  }
+}
+
+async function remove(id: number) {
+  if (!confirm('Are you sure?')) return
+  await alertRulesApi.remove(id)
+  await loadData()
+}
 </script>

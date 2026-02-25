@@ -5,10 +5,16 @@
         <h1 class="h3 mb-0">Custom Widgets Gallery</h1>
       </div>
       <div class="col-auto">
-        <button class="btn btn-primary btn-sm">+ Add Widget</button>
+        <button class="btn btn-primary btn-sm" @click="openCreate">+ Add Widget</button>
       </div>
     </div>
 
+    <div v-if="loading" class="text-center py-5">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+    </div>
+    <template v-else>
     <div class="row">
       <div class="col-lg-6 mb-4">
         <div class="card h-100">
@@ -47,7 +53,7 @@
           <div class="card-body">
             <div class="row text-center">
               <div class="col">
-                <div style="font-size: 28px;">24.2°C</div>
+                <div style="font-size: 28px;">24.2C</div>
                 <div class="text-muted small">Inlet Temp</div>
                 <span class="badge bg-success mt-1">Normal</span>
               </div>
@@ -173,34 +179,110 @@
         </div>
       </div>
     </div>
+
+    <div class="card">
+      <div class="card-header fw-semibold">Widget Alerts Data</div>
+      <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+          <thead class="table-light">
+            <tr><th>Severity</th><th>Message</th><th>Time</th><th>Actions</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="alert in alerts" :key="alert.id">
+              <td><span :class="['badge', alert.severity === 'Critical' ? 'bg-danger' : alert.severity === 'Warning' ? 'bg-warning' : 'bg-info']">{{ alert.severity }}</span></td>
+              <td>{{ alert.message }}</td>
+              <td class="text-muted small">{{ alert.time }}</td>
+              <td>
+                <button class="btn btn-sm btn-outline-secondary me-1" @click="openEdit(alert)">Edit</button>
+                <button class="btn btn-sm btn-outline-danger" @click="remove(alert.id)">Delete</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    </template>
+
+    <!-- Modal -->
+    <div v-if="showModal" class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">{{ editing ? 'Edit' : 'Add' }} Widget</h5>
+            <button type="button" class="btn-close" @click="showModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3"><label class="form-label">Severity</label><input v-model="form.severity" type="text" class="form-control" /></div>
+            <div class="mb-3"><label class="form-label">Message</label><input v-model="form.message" type="text" class="form-control" /></div>
+            <div class="mb-3"><label class="form-label">Time</label><input v-model="form.time" type="text" class="form-control" /></div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showModal = false">Cancel</button>
+            <button class="btn btn-primary" @click="save" :disabled="saving">
+              <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-const alerts = [
-  {
-    id: 1,
-    severity: 'Critical',
-    message: 'High temperature detected in Hall B - CAB-B-02',
-    time: '5 min ago'
-  },
-  {
-    id: 2,
-    severity: 'Warning',
-    message: 'Power supply redundancy degraded on PDU-03',
-    time: '15 min ago'
-  },
-  {
-    id: 3,
-    severity: 'Info',
-    message: 'Sensor calibration completed for HVAC-01',
-    time: '2 hours ago'
-  },
-  {
-    id: 4,
-    severity: 'Warning',
-    message: 'Rack capacity utilization reaching 85% in Hall A',
-    time: '4 hours ago'
+import { ref, onMounted } from 'vue'
+import { widgetsApi, type Widget } from '../../services/api'
+
+const alerts = ref<Widget[]>([])
+const loading = ref(true)
+const showModal = ref(false)
+const editing = ref<Widget | null>(null)
+const saving = ref(false)
+
+const defaultForm = { severity: '', message: '', time: '' }
+const form = ref({ ...defaultForm })
+
+async function loadData() {
+  alerts.value = await widgetsApi.getAll()
+}
+
+onMounted(async () => {
+  try {
+    await loadData()
+  } finally {
+    loading.value = false
   }
-];
+})
+
+function openCreate() {
+  editing.value = null
+  form.value = { ...defaultForm }
+  showModal.value = true
+}
+
+function openEdit(item: Widget) {
+  editing.value = item
+  form.value = { severity: item.severity, message: item.message, time: item.time }
+  showModal.value = true
+}
+
+async function save() {
+  saving.value = true
+  try {
+    if (editing.value) {
+      await widgetsApi.update(editing.value.id, form.value)
+    } else {
+      await widgetsApi.create(form.value)
+    }
+    showModal.value = false
+    await loadData()
+  } finally {
+    saving.value = false
+  }
+}
+
+async function remove(id: number) {
+  if (!confirm('Are you sure you want to delete this widget?')) return
+  await widgetsApi.remove(id)
+  await loadData()
+}
 </script>

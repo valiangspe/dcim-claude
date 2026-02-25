@@ -1,8 +1,14 @@
 <template>
   <div class="request-types">
-    <div class="card">
-      <div class="card-header bg-info text-white">
+    <div v-if="loading" class="text-center py-5">
+      <div class="spinner-border" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+    </div>
+    <div v-else class="card">
+      <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
         <h5 class="mb-0">Change Request Types</h5>
+        <button class="btn btn-sm btn-light" @click="openCreate">+ Add</button>
       </div>
       <div class="card-body">
         <div class="row g-3">
@@ -15,7 +21,10 @@
                   <span class="badge" :style="{ backgroundColor: type.color }">
                     {{ type.count }} pending
                   </span>
-                  <button class="btn btn-sm btn-outline-primary">Edit</button>
+                  <div>
+                    <button class="btn btn-sm btn-outline-primary me-1" @click="openEdit(type)">Edit</button>
+                    <button class="btn btn-sm btn-outline-danger" @click="remove(type.id)">Delete</button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -24,65 +33,101 @@
       </div>
       <div class="card-footer d-flex justify-content-between">
         <span class="text-muted">Total request types: {{ requestTypes.length }}</span>
-        <button class="btn btn-sm btn-primary">Add Type</button>
+      </div>
+    </div>
+
+    <div v-if="showModal" class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">{{ editing ? 'Edit' : 'New' }} Request Type</h5>
+            <button type="button" class="btn-close" @click="showModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">Name</label>
+              <input v-model="form.name" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Description</label>
+              <input v-model="form.description" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Color</label>
+              <input v-model="form.color" type="color" class="form-control form-control-color" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Count</label>
+              <input v-model.number="form.count" type="number" class="form-control" />
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showModal = false">Cancel</button>
+            <button class="btn btn-primary" @click="save" :disabled="saving">
+              <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>
+              Save
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-interface RequestType {
-  id: string
-  name: string
-  description: string
-  color: string
-  count: number
+import { ref, onMounted } from 'vue'
+import { requestTypesApi, type RequestType } from '../../services/api'
+
+const requestTypes = ref<RequestType[]>([])
+const loading = ref(true)
+const showModal = ref(false)
+const saving = ref(false)
+const editing = ref<RequestType | null>(null)
+
+const defaultForm = { name: '', description: '', color: '#0d6efd', count: 0 }
+const form = ref({ ...defaultForm })
+
+async function loadData() {
+  requestTypes.value = await requestTypesApi.getAll()
 }
 
-const requestTypes: RequestType[] = [
-  {
-    id: '1',
-    name: 'Hardware',
-    description: 'Server, storage, and equipment changes',
-    color: '#0d6efd',
-    count: 12
-  },
-  {
-    id: '2',
-    name: 'Network',
-    description: 'Network configuration and connectivity updates',
-    color: '#198754',
-    count: 8
-  },
-  {
-    id: '3',
-    name: 'Software',
-    description: 'Application and operating system updates',
-    color: '#fd7e14',
-    count: 15
-  },
-  {
-    id: '4',
-    name: 'Access',
-    description: 'Security and access control modifications',
-    color: '#6c757d',
-    count: 6
-  },
-  {
-    id: '5',
-    name: 'Emergency',
-    description: 'Critical and emergency changes',
-    color: '#dc3545',
-    count: 2
-  },
-  {
-    id: '6',
-    name: 'Maintenance',
-    description: 'Preventive maintenance and housekeeping',
-    color: '#0dcaf0',
-    count: 4
+onMounted(async () => {
+  try {
+    await loadData()
+  } finally {
+    loading.value = false
   }
-]
+})
+
+function openCreate() {
+  editing.value = null
+  form.value = { ...defaultForm }
+  showModal.value = true
+}
+
+function openEdit(type: RequestType) {
+  editing.value = type
+  form.value = { name: type.name, description: type.description, color: type.color, count: type.count }
+  showModal.value = true
+}
+
+async function save() {
+  saving.value = true
+  try {
+    if (editing.value) await requestTypesApi.update(editing.value.id, form.value)
+    else await requestTypesApi.create(form.value)
+    showModal.value = false
+    await loadData()
+  } finally {
+    saving.value = false
+  }
+}
+
+async function remove(id: number) {
+  if (!confirm('Are you sure?')) return
+  await requestTypesApi.remove(id)
+  await loadData()
+}
 </script>
 
 <style scoped>

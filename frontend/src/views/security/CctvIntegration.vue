@@ -1,21 +1,54 @@
 <script setup lang="ts">
-const cameras = [
-  { id: 1, name: 'Main Entrance', location: 'Data Center A - Floor 1', status: 'online', recording: 'active', resolution: '4K', storage: '68%', lastFrame: '2026-02-20 15:42' },
-  { id: 2, name: 'Server Room B', location: 'Data Center B - Floor 2', status: 'online', recording: 'active', resolution: '2K', storage: '45%', lastFrame: '2026-02-20 15:42' },
-  { id: 3, name: 'Network Hub', location: 'Data Center A - Floor 3', status: 'online', recording: 'active', resolution: '2K', storage: '52%', lastFrame: '2026-02-20 15:42' },
-  { id: 4, name: 'Backup Vault', location: 'Secure Storage - B1', status: 'online', recording: 'active', resolution: '4K', storage: '71%', lastFrame: '2026-02-20 15:42' },
-  { id: 5, name: 'UPS Room', location: 'Data Center C - Floor 1', status: 'offline', recording: 'paused', resolution: '1080p', storage: '38%', lastFrame: '2026-02-20 14:15' },
-  { id: 6, name: 'Loading Dock', location: 'Facility - Exterior', status: 'online', recording: 'active', resolution: '2K', storage: '59%', lastFrame: '2026-02-20 15:42' },
-  { id: 7, name: 'Control Room', location: 'Operations Center', status: 'online', recording: 'active', resolution: '4K', storage: '64%', lastFrame: '2026-02-20 15:42' },
-  { id: 8, name: 'Entrance Foyer', location: 'Data Center A - Floor 0', status: 'online', recording: 'active', resolution: '2K', storage: '41%', lastFrame: '2026-02-20 15:42' },
-]
+import { ref, onMounted } from 'vue'
+import { cctvCamerasApi, type CctvCamera, recordingStatsApi, type RecordingStat } from '../../services/api'
 
-const recordingStats = [
-  { location: 'Data Center A', cameras: 3, totalStorage: '2TB', usedStorage: '1.34TB', retention: '30 days' },
-  { location: 'Data Center B', cameras: 2, totalStorage: '1TB', usedStorage: '0.58TB', retention: '30 days' },
-  { location: 'Data Center C', cameras: 1, totalStorage: '512GB', usedStorage: '0.28TB', retention: '30 days' },
-  { location: 'Facility', cameras: 2, totalStorage: '1TB', usedStorage: '0.62TB', retention: '30 days' },
-]
+const cameras = ref<CctvCamera[]>([])
+const recordingStats = ref<RecordingStat[]>([])
+const loading = ref(true)
+
+const showModal = ref(false)
+const saving = ref(false)
+const editing = ref<CctvCamera | null>(null)
+const defaultForm = { name: '', location: '', status: 'online', recording: 'active', resolution: '', storage: '', lastFrame: '' }
+const form = ref({ ...defaultForm })
+
+async function loadData() {
+  const [c, r] = await Promise.all([cctvCamerasApi.getAll(), recordingStatsApi.getAll()])
+  cameras.value = c
+  recordingStats.value = r
+}
+
+onMounted(async () => { try { await loadData() } finally { loading.value = false } })
+
+function openCreate() {
+  editing.value = null
+  form.value = { ...defaultForm }
+  showModal.value = true
+}
+
+function openEdit(camera: CctvCamera) {
+  editing.value = camera
+  form.value = { name: camera.name, location: camera.location, status: camera.status, recording: camera.recording, resolution: camera.resolution, storage: camera.storage, lastFrame: camera.lastFrame }
+  showModal.value = true
+}
+
+async function save() {
+  saving.value = true
+  try {
+    if (editing.value) await cctvCamerasApi.update(editing.value.id, form.value)
+    else await cctvCamerasApi.create(form.value)
+    showModal.value = false
+    await loadData()
+  } finally {
+    saving.value = false
+  }
+}
+
+async function remove(id: number) {
+  if (!confirm('Are you sure?')) return
+  await cctvCamerasApi.remove(id)
+  await loadData()
+}
 
 const statusColor = {
   online: 'success',
@@ -31,6 +64,9 @@ const recordingColor = {
 <template>
   <div>
     <h4 class="mb-4">CCTV Integration</h4>
+
+    <div v-if="loading" class="text-center py-5"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>
+    <template v-else>
 
     <!-- System Stats -->
     <div class="row g-3 mb-4">
@@ -70,7 +106,10 @@ const recordingColor = {
 
     <!-- Cameras List -->
     <div class="card border-0 shadow-sm mb-4">
-      <div class="card-header bg-transparent fw-semibold">Camera Status</div>
+      <div class="card-header bg-transparent fw-semibold d-flex align-items-center justify-content-between">
+        <span>Camera Status</span>
+        <button class="btn btn-sm btn-primary" @click="openCreate">+ Add Camera</button>
+      </div>
       <div class="card-body p-0">
         <table class="table table-hover align-middle mb-0">
           <thead class="table-light">
@@ -82,6 +121,7 @@ const recordingColor = {
               <th>Resolution</th>
               <th>Storage Used</th>
               <th>Last Frame</th>
+              <th style="width:120px">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -100,6 +140,10 @@ const recordingColor = {
                 </div>
               </td>
               <td class="text-muted">{{ camera.lastFrame }}</td>
+              <td>
+                <button class="btn btn-sm btn-outline-primary me-1" @click="openEdit(camera)">Edit</button>
+                <button class="btn btn-sm btn-outline-danger" @click="remove(camera.id)">Delete</button>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -136,6 +180,62 @@ const recordingColor = {
             </tr>
           </tbody>
         </table>
+      </div>
+    </div>
+    </template>
+
+    <!-- Modal -->
+    <div v-if="showModal" class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">{{ editing ? 'Edit' : 'Add' }} Camera</h5>
+            <button type="button" class="btn-close" @click="showModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">Name</label>
+              <input v-model="form.name" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Location</label>
+              <input v-model="form.location" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Status</label>
+              <select v-model="form.status" class="form-select">
+                <option value="online">online</option>
+                <option value="offline">offline</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Recording</label>
+              <select v-model="form.recording" class="form-select">
+                <option value="active">active</option>
+                <option value="paused">paused</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Resolution</label>
+              <input v-model="form.resolution" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Storage</label>
+              <input v-model="form.storage" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Last Frame</label>
+              <input v-model="form.lastFrame" type="text" class="form-control" />
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showModal = false">Cancel</button>
+            <button class="btn btn-primary" @click="save" :disabled="saving">
+              <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>
+              Save
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </div>

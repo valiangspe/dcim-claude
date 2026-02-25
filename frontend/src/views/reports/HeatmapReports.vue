@@ -1,9 +1,17 @@
 <template>
   <div class="heatmap-reports">
+    <div v-if="loading" class="text-center py-5">
+      <div class="spinner-border text-secondary" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+    </div>
+    <template v-else>
     <div class="card">
       <div class="card-header bg-secondary text-white">
         <div class="d-flex justify-content-between align-items-center">
           <h5 class="mb-0">Heatmap Reports</h5>
+          <div class="d-flex gap-2 align-items-center">
+          <button class="btn btn-sm btn-light" @click="openCreate">+ Add</button>
           <div class="btn-group btn-group-sm" role="group">
             <input v-model="heatmapType" type="radio" class="btn-check" id="power" value="power" />
             <label class="btn btn-light" for="power">Power</label>
@@ -14,6 +22,7 @@
             <input v-model="heatmapType" type="radio" class="btn-check" id="util" value="util" />
             <label class="btn btn-light" for="util">Utilization</label>
           </div>
+          </div>
         </div>
       </div>
       <div class="card-body">
@@ -22,19 +31,19 @@
             <thead>
               <tr class="table-light">
                 <th>Rack</th>
-                <th v-for="col in 12" :key="col">U{{ col }}</th>
+                <th v-for="col in colLabels" :key="col">{{ col }}</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="(row, rowIdx) in heatmapData" :key="rowIdx">
-                <td class="fw-bold">Row {{ rowIdx + 1 }}</td>
-                <td v-for="(cell, cellIdx) in row" :key="cellIdx">
+              <tr v-for="(row, rowLabel) in heatmapGrid" :key="rowLabel">
+                <td class="fw-bold">{{ rowLabel }}</td>
+                <td v-for="col in colLabels" :key="col">
                   <div
                     class="heatmap-cell"
-                    :style="{ backgroundColor: getCellColor(cell) }"
-                    :title="`${getMetricLabel()}: ${cell.value}`"
+                    :style="{ backgroundColor: getCellColor(row[col]) }"
+                    :title="`${getMetricLabel()}: ${row[col]?.displayValue || ''}`"
                   >
-                    <small class="text-white fw-bold">{{ cell.value }}</small>
+                    <small class="text-white fw-bold">{{ row[col]?.displayValue || '' }}</small>
                   </div>
                 </td>
               </tr>
@@ -56,166 +65,135 @@
         </div>
       </div>
     </div>
+    </template>
+
+    <!-- Modal -->
+    <div v-if="showModal" class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">{{ editing ? 'Edit' : 'Add' }} Heatmap Data</h5>
+            <button type="button" class="btn-close" @click="showModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">Category</label>
+              <select v-model="form.category" class="form-select">
+                <option value="power">Power</option>
+                <option value="temp">Temperature</option>
+                <option value="util">Utilization</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Row Label</label>
+              <input v-model="form.rowLabel" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Column Label</label>
+              <input v-model="form.colLabel" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Value</label>
+              <input v-model.number="form.value" type="number" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Display Value</label>
+              <input v-model="form.displayValue" type="text" class="form-control" />
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showModal = false">Cancel</button>
+            <button class="btn btn-primary" @click="save" :disabled="saving">
+              <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-
-interface HeatmapCell {
-  value: string
-  numericValue: number
-}
-
-interface HeatmapRow {
-  [key: number]: HeatmapCell
-}
+import { ref, computed, onMounted } from 'vue'
+import { heatmapDataApi, type HeatmapData } from '../../services/api'
 
 const heatmapType = ref<string>('power')
+const allHeatmapData = ref<HeatmapData[]>([])
+const loading = ref(true)
+const showModal = ref(false)
+const saving = ref(false)
+const editing = ref<HeatmapData | null>(null)
+const defaultForm = { category: 'power', rowLabel: '', colLabel: '', value: 0, displayValue: '' }
+const form = ref({ ...defaultForm })
 
-const powerHeatmapData: HeatmapRow[] = [
-  {
-    0: { value: '8.2', numericValue: 82 },
-    1: { value: '7.9', numericValue: 79 },
-    2: { value: '9.1', numericValue: 91 },
-    3: { value: '6.5', numericValue: 65 },
-    4: { value: '8.4', numericValue: 84 },
-    5: { value: '7.8', numericValue: 78 },
-    6: { value: '9.3', numericValue: 93 },
-    7: { value: '6.2', numericValue: 62 },
-    8: { value: '8.7', numericValue: 87 },
-    9: { value: '7.5', numericValue: 75 },
-    10: { value: '8.9', numericValue: 89 },
-    11: { value: '6.8', numericValue: 68 }
-  },
-  {
-    0: { value: '7.5', numericValue: 75 },
-    1: { value: '8.1', numericValue: 81 },
-    2: { value: '6.9', numericValue: 69 },
-    3: { value: '9.0', numericValue: 90 },
-    4: { value: '7.3', numericValue: 73 },
-    5: { value: '8.8', numericValue: 88 },
-    6: { value: '6.4', numericValue: 64 },
-    7: { value: '9.2', numericValue: 92 },
-    8: { value: '7.7', numericValue: 77 },
-    9: { value: '8.3', numericValue: 83 },
-    10: { value: '6.6', numericValue: 66 },
-    11: { value: '9.5', numericValue: 95 }
-  },
-  {
-    0: { value: '8.6', numericValue: 86 },
-    1: { value: '6.7', numericValue: 67 },
-    2: { value: '8.4', numericValue: 84 },
-    3: { value: '7.2', numericValue: 72 },
-    4: { value: '9.1', numericValue: 91 },
-    5: { value: '6.9', numericValue: 69 },
-    6: { value: '8.5', numericValue: 85 },
-    7: { value: '7.4', numericValue: 74 },
-    8: { value: '8.2', numericValue: 82 },
-    9: { value: '9.0', numericValue: 90 },
-    10: { value: '7.0', numericValue: 70 },
-    11: { value: '8.3', numericValue: 83 }
+function openCreate() {
+  editing.value = null
+  form.value = { ...defaultForm }
+  showModal.value = true
+}
+
+function openEdit(item: HeatmapData) {
+  editing.value = item
+  form.value = { category: item.category, rowLabel: item.rowLabel, colLabel: item.colLabel, value: item.value, displayValue: item.displayValue }
+  showModal.value = true
+}
+
+async function save() {
+  saving.value = true
+  try {
+    if (editing.value) await heatmapDataApi.update(editing.value.id, form.value)
+    else await heatmapDataApi.create(form.value)
+    showModal.value = false
+    await loadData()
+  } finally {
+    saving.value = false
   }
-]
+}
 
-const tempHeatmapData: HeatmapRow[] = [
-  {
-    0: { value: '24', numericValue: 24 },
-    1: { value: '23', numericValue: 23 },
-    2: { value: '26', numericValue: 26 },
-    3: { value: '22', numericValue: 22 },
-    4: { value: '25', numericValue: 25 },
-    5: { value: '23', numericValue: 23 },
-    6: { value: '27', numericValue: 27 },
-    7: { value: '21', numericValue: 21 },
-    8: { value: '25', numericValue: 25 },
-    9: { value: '24', numericValue: 24 },
-    10: { value: '26', numericValue: 26 },
-    11: { value: '23', numericValue: 23 }
-  },
-  {
-    0: { value: '23', numericValue: 23 },
-    1: { value: '24', numericValue: 24 },
-    2: { value: '22', numericValue: 22 },
-    3: { value: '25', numericValue: 25 },
-    4: { value: '23', numericValue: 23 },
-    5: { value: '26', numericValue: 26 },
-    6: { value: '21', numericValue: 21 },
-    7: { value: '27', numericValue: 27 },
-    8: { value: '24', numericValue: 24 },
-    9: { value: '25', numericValue: 25 },
-    10: { value: '22', numericValue: 22 },
-    11: { value: '28', numericValue: 28 }
-  },
-  {
-    0: { value: '25', numericValue: 25 },
-    1: { value: '22', numericValue: 22 },
-    2: { value: '24', numericValue: 24 },
-    3: { value: '23', numericValue: 23 },
-    4: { value: '26', numericValue: 26 },
-    5: { value: '22', numericValue: 22 },
-    6: { value: '25', numericValue: 25 },
-    7: { value: '23', numericValue: 23 },
-    8: { value: '24', numericValue: 24 },
-    9: { value: '27', numericValue: 27 },
-    10: { value: '21', numericValue: 21 },
-    11: { value: '25', numericValue: 25 }
+async function remove(id: number) {
+  if (!confirm('Are you sure?')) return
+  await heatmapDataApi.remove(id)
+  await loadData()
+}
+
+async function loadData() {
+  allHeatmapData.value = await heatmapDataApi.getAll()
+}
+
+onMounted(async () => {
+  try {
+    await loadData()
+  } finally {
+    loading.value = false
   }
-]
+})
 
-const utilHeatmapData: HeatmapRow[] = [
-  {
-    0: { value: '92%', numericValue: 92 },
-    1: { value: '78%', numericValue: 78 },
-    2: { value: '85%', numericValue: 85 },
-    3: { value: '65%', numericValue: 65 },
-    4: { value: '88%', numericValue: 88 },
-    5: { value: '72%', numericValue: 72 },
-    6: { value: '95%', numericValue: 95 },
-    7: { value: '60%', numericValue: 60 },
-    8: { value: '89%', numericValue: 89 },
-    9: { value: '76%', numericValue: 76 },
-    10: { value: '91%', numericValue: 91 },
-    11: { value: '68%', numericValue: 68 }
-  },
-  {
-    0: { value: '74%', numericValue: 74 },
-    1: { value: '86%', numericValue: 86 },
-    2: { value: '69%', numericValue: 69 },
-    3: { value: '93%', numericValue: 93 },
-    4: { value: '71%', numericValue: 71 },
-    5: { value: '87%', numericValue: 87 },
-    6: { value: '62%', numericValue: 62 },
-    7: { value: '94%', numericValue: 94 },
-    8: { value: '75%', numericValue: 75 },
-    9: { value: '84%', numericValue: 84 },
-    10: { value: '64%', numericValue: 64 },
-    11: { value: '96%', numericValue: 96 }
-  },
-  {
-    0: { value: '88%', numericValue: 88 },
-    1: { value: '65%', numericValue: 65 },
-    2: { value: '82%', numericValue: 82 },
-    3: { value: '70%', numericValue: 70 },
-    4: { value: '91%', numericValue: 91 },
-    5: { value: '68%', numericValue: 68 },
-    6: { value: '85%', numericValue: 85 },
-    7: { value: '72%', numericValue: 72 },
-    8: { value: '80%', numericValue: 80 },
-    9: { value: '93%', numericValue: 93 },
-    10: { value: '66%', numericValue: 66 },
-    11: { value: '87%', numericValue: 87 }
-  }
-]
+const filteredData = computed(() => {
+  return allHeatmapData.value.filter(d => d.category === heatmapType.value)
+})
 
-const heatmapData = ref<HeatmapRow[]>(powerHeatmapData)
+const colLabels = computed(() => {
+  const cols = new Set<string>()
+  filteredData.value.forEach(d => cols.add(d.colLabel))
+  return Array.from(cols).sort()
+})
+
+const heatmapGrid = computed(() => {
+  const grid: Record<string, Record<string, HeatmapData>> = {}
+  filteredData.value.forEach(d => {
+    if (!grid[d.rowLabel]) grid[d.rowLabel] = {}
+    grid[d.rowLabel][d.colLabel] = d
+  })
+  return grid
+})
 
 const getMetricLabel = (): string => {
   switch (heatmapType.value) {
     case 'power':
       return 'Power (kW)'
     case 'temp':
-      return 'Temperature (°C)'
+      return 'Temperature (C)'
     case 'util':
       return 'Utilization (%)'
     default:
@@ -223,8 +201,9 @@ const getMetricLabel = (): string => {
   }
 }
 
-const getCellColor = (cell: HeatmapCell): string => {
-  const value = cell.numericValue
+const getCellColor = (cell: HeatmapData | undefined): string => {
+  if (!cell) return '#6c757d'
+  const value = cell.value
 
   if (heatmapType.value === 'power') {
     if (value >= 90) return '#dc3545'
@@ -253,10 +232,10 @@ const getCellColor = (cell: HeatmapCell): string => {
 const getColorLegend = () => {
   if (heatmapType.value === 'temp') {
     return [
-      { id: '1', color: '#0dcaf0', label: '< 21°C (Cold)' },
-      { id: '2', color: '#198754', label: '21-25°C (Optimal)' },
-      { id: '3', color: '#ffc107', label: '25-27°C (Warm)' },
-      { id: '4', color: '#dc3545', label: '> 27°C (Hot)' }
+      { id: '1', color: '#0dcaf0', label: '< 21C (Cold)' },
+      { id: '2', color: '#198754', label: '21-25C (Optimal)' },
+      { id: '3', color: '#ffc107', label: '25-27C (Warm)' },
+      { id: '4', color: '#dc3545', label: '> 27C (Hot)' }
     ]
   }
 

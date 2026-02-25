@@ -2,149 +2,174 @@
   <div class="ere">
     <h2 class="mb-4">Energy Reuse Effectiveness (ERE)</h2>
 
-    <!-- ERE Main Card -->
-    <div class="row mb-4">
-      <div class="col-md-8">
-        <div class="card">
-          <div class="card-body">
-            <h5 class="card-title">ERE Metric</h5>
-            <div class="display-3 text-success">0.12</div>
-            <p class="text-muted mb-3">Lower is better; represents % of energy reused</p>
-            <div class="alert alert-info">
-              <strong>Interpretation:</strong> 12% of the energy that would normally be lost is being captured and reused in facility operations.
+    <div v-if="loading" class="text-center py-5">
+      <div class="spinner-border" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+    </div>
+
+    <template v-else>
+      <!-- ERE Metrics Cards -->
+      <div class="row mb-4">
+        <div v-for="m in metrics.slice(0, 2)" :key="m.id" :class="metrics.indexOf(m) === 0 ? 'col-md-8' : 'col-md-4'">
+          <div class="card">
+            <div class="card-body">
+              <h5 class="card-title">{{ m.name }}</h5>
+              <div :class="metrics.indexOf(m) === 0 ? 'display-3' : 'display-5'" class="text-success">{{ m.value }} {{ m.unit }}</div>
+              <p class="text-muted">Target: {{ m.target }}</p>
+              <span class="badge" :class="m.status === 'on-track' ? 'bg-success' : m.status === 'warning' ? 'bg-warning text-dark' : 'bg-info'">{{ m.status }}</span>
             </div>
           </div>
         </div>
       </div>
-      <div class="col-md-4">
-        <div class="card">
-          <div class="card-body">
-            <h5 class="card-title">Energy Reuse Summary</h5>
-            <div class="row text-center">
-              <div class="col-6">
-                <small class="text-muted">Total Captured</small>
-                <div class="h6">42.4 MWh</div>
-              </div>
-              <div class="col-6">
-                <small class="text-muted">Annual Value</small>
-                <div class="h6">$3,821</div>
-              </div>
-            </div>
-            <hr />
-            <div class="text-center">
-              <small class="text-muted">YoY Growth</small>
-              <div class="h6 text-success">↑ 18%</div>
-            </div>
-          </div>
+
+      <!-- All ERE Metrics Table -->
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h5 class="mb-0">ERE Metrics</h5>
+          <button class="btn btn-sm btn-primary" @click="openCreate">+ Add</button>
+        </div>
+        <div class="card-body">
+          <table class="table table-striped">
+            <thead>
+              <tr>
+                <th>Metric</th>
+                <th>Category</th>
+                <th>Value</th>
+                <th>Unit</th>
+                <th>Target</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="m in metrics" :key="m.id">
+                <td>{{ m.name }}</td>
+                <td>{{ m.category }}</td>
+                <td><strong>{{ m.value }}</strong></td>
+                <td>{{ m.unit }}</td>
+                <td>{{ m.target }}</td>
+                <td>
+                  <span class="badge" :class="m.status === 'on-track' ? 'bg-success' : m.status === 'warning' ? 'bg-warning text-dark' : 'bg-danger'">{{ m.status }}</span>
+                </td>
+                <td>
+                  <button class="btn btn-sm btn-outline-secondary me-1" @click="openEdit(m)">Edit</button>
+                  <button class="btn btn-sm btn-outline-danger" @click="remove(m.id)">Delete</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
-    </div>
+    </template>
 
-    <!-- Reuse Sources Table -->
-    <div class="card">
-      <div class="card-header">
-        <h5 class="mb-0">Energy Reuse Sources</h5>
-      </div>
-      <div class="card-body">
-        <table class="table table-striped">
-          <thead>
-            <tr>
-              <th>Source</th>
-              <th>Energy Recovered (MWh/year)</th>
-              <th>Reuse Application</th>
-              <th>Efficiency</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Hot Aisle Containment</td>
-              <td>18.6</td>
-              <td>Building Heating</td>
-              <td>87%</td>
-              <td><span class="badge bg-success">Active</span></td>
-            </tr>
-            <tr>
-              <td>Chiller Waste Heat</td>
-              <td>14.2</td>
-              <td>Hot Water Supply</td>
-              <td>82%</td>
-              <td><span class="badge bg-success">Active</span></td>
-            </tr>
-            <tr>
-              <td>Server Fan Exhaust</td>
-              <td>6.8</td>
-              <td>Facility Ventilation Preheat</td>
-              <td>76%</td>
-              <td><span class="badge bg-success">Active</span></td>
-            </tr>
-            <tr>
-              <td>UPS Cooling Loop</td>
-              <td>2.8</td>
-              <td>Standby Area Heating</td>
-              <td>71%</td>
-              <td><span class="badge bg-warning">Monitoring</span></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- Monthly Trend -->
-    <div class="card mt-4">
-      <div class="card-header">
-        <h5 class="mb-0">Monthly Recovery Trend</h5>
-      </div>
-      <div class="card-body">
-        <table class="table table-sm">
-          <thead>
-            <tr>
-              <th>Month</th>
-              <th>Energy Recovered (MWh)</th>
-              <th>Reuse Rate (%)</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>January</td>
-              <td>4.2</td>
-              <td>14%</td>
-            </tr>
-            <tr>
-              <td>February</td>
-              <td>3.8</td>
-              <td>12%</td>
-            </tr>
-            <tr>
-              <td>March</td>
-              <td>3.5</td>
-              <td>11%</td>
-            </tr>
-            <tr>
-              <td>April</td>
-              <td>3.1</td>
-              <td>10%</td>
-            </tr>
-            <tr>
-              <td>May</td>
-              <td>3.3</td>
-              <td>10%</td>
-            </tr>
-            <tr>
-              <td>June</td>
-              <td>3.2</td>
-              <td>10%</td>
-            </tr>
-          </tbody>
-        </table>
+    <div v-if="showModal" class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">{{ editing ? 'Edit' : 'New' }} Metric</h5>
+            <button type="button" class="btn-close" @click="showModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">Category</label>
+              <input v-model="form.category" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Name</label>
+              <input v-model="form.name" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Value</label>
+              <input v-model="form.value" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Unit</label>
+              <input v-model="form.unit" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Target</label>
+              <input v-model="form.target" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Status</label>
+              <select v-model="form.status" class="form-select">
+                <option>on-track</option>
+                <option>warning</option>
+                <option>critical</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showModal = false">Cancel</button>
+            <button class="btn btn-primary" @click="save" :disabled="saving">
+              <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>
+              Save
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-// Mock data for Energy Reuse Effectiveness component
-// No imports needed
+import { ref, computed, onMounted } from 'vue'
+import { sustainabilityMetricsApi, type SustainabilityMetric } from '../../services/api'
+
+const allMetrics = ref<SustainabilityMetric[]>([])
+const loading = ref(true)
+const showModal = ref(false)
+const saving = ref(false)
+const editing = ref<SustainabilityMetric | null>(null)
+
+const PAGE = 'ere'
+const metrics = computed(() => allMetrics.value.filter(m => m.page === PAGE))
+
+const defaultForm = { category: '', name: '', value: '', unit: '', target: '', status: 'on-track', page: PAGE }
+const form = ref({ ...defaultForm })
+
+async function loadData() {
+  allMetrics.value = await sustainabilityMetricsApi.getAll()
+}
+
+onMounted(async () => {
+  try {
+    await loadData()
+  } finally {
+    loading.value = false
+  }
+})
+
+function openCreate() {
+  editing.value = null
+  form.value = { ...defaultForm }
+  showModal.value = true
+}
+
+function openEdit(m: SustainabilityMetric) {
+  editing.value = m
+  form.value = { category: m.category, name: m.name, value: m.value, unit: m.unit, target: m.target, status: m.status, page: PAGE }
+  showModal.value = true
+}
+
+async function save() {
+  saving.value = true
+  try {
+    if (editing.value) await sustainabilityMetricsApi.update(editing.value.id, form.value)
+    else await sustainabilityMetricsApi.create(form.value)
+    showModal.value = false
+    await loadData()
+  } finally {
+    saving.value = false
+  }
+}
+
+async function remove(id: number) {
+  if (!confirm('Are you sure?')) return
+  await sustainabilityMetricsApi.remove(id)
+  await loadData()
+}
 </script>
 
 <style scoped>

@@ -1,7 +1,16 @@
 <template>
   <div class="container-fluid py-4">
-    <h1 class="h3 mb-4">System Configuration</h1>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h1 class="h3 mb-0">System Configuration</h1>
+      <button class="btn btn-primary btn-sm" @click="openCreate">+ Add Setting</button>
+    </div>
 
+    <div v-if="loading" class="text-center py-5">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+    </div>
+    <template v-else>
     <div class="row">
       <div class="col-lg-6">
         <div class="card mb-4">
@@ -107,24 +116,130 @@
         </div>
       </div>
     </div>
+    </template>
+
+    <!-- Modal -->
+    <div v-if="showModal" class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">{{ editing ? 'Edit' : 'Add' }} Setting</h5>
+            <button type="button" class="btn-close" @click="showModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">Key</label>
+              <input v-model="form.key" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Value</label>
+              <input v-model="form.value" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Category</label>
+              <input v-model="form.category" type="text" class="form-control" />
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showModal = false">Cancel</button>
+            <button class="btn btn-primary" @click="save" :disabled="saving">
+              <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-const config = {
-  timezone: 'UTC',
-  tempUnit: 'Celsius (°C)',
-  powerUnit: 'Kilowatts (kW)',
-  locale: 'English (US)',
-  metricsRetention: 365,
-  logsRetention: 90,
-  alarmsRetention: 180,
-  backupFrequency: 'Daily at 02:00 UTC',
-  sessionTimeout: 30,
-  passwordPolicy: 'Complex (12+ chars, mixed case, numbers)',
-  mfaRequired: true,
-  alertAggregation: '5 minutes',
-  emailNotifications: true,
+import { ref, onMounted } from 'vue'
+import { systemSettingsApi, type SystemSetting } from '../../services/api'
+
+const showModal = ref(false)
+const saving = ref(false)
+const editing = ref<SystemSetting | null>(null)
+const form = ref({ key: '', value: '', category: '' })
+const allSettings = ref<SystemSetting[]>([])
+
+function openCreate() {
+  editing.value = null
+  form.value = { key: '', value: '', category: '' }
+  showModal.value = true
+}
+
+function openEdit(item: SystemSetting) {
+  editing.value = item
+  form.value = { key: item.key, value: item.value, category: item.category }
+  showModal.value = true
+}
+
+async function save() {
+  saving.value = true
+  try {
+    if (editing.value) await systemSettingsApi.update(editing.value.id, form.value)
+    else await systemSettingsApi.create(form.value)
+    showModal.value = false
+    await loadData()
+  } finally {
+    saving.value = false
+  }
+}
+
+async function remove(id: number) {
+  if (!confirm('Are you sure?')) return
+  await systemSettingsApi.remove(id)
+  await loadData()
+}
+
+const config = ref<Record<string, any>>({
+  timezone: '',
+  tempUnit: '',
+  powerUnit: '',
+  locale: '',
+  metricsRetention: 0,
+  logsRetention: 0,
+  alarmsRetention: 0,
+  backupFrequency: '',
+  sessionTimeout: 0,
+  passwordPolicy: '',
+  mfaRequired: false,
+  alertAggregation: '',
+  emailNotifications: false,
   smsAlerts: false
-};
+})
+const loading = ref(true)
+
+async function loadData() {
+  const settings = await systemSettingsApi.getAll()
+  const map: Record<string, string> = {}
+  settings.forEach((s: SystemSetting) => {
+    map[s.key] = s.value
+  })
+  config.value = {
+    timezone: map['timezone'] || '',
+    tempUnit: map['tempUnit'] || '',
+    powerUnit: map['powerUnit'] || '',
+    locale: map['locale'] || '',
+    metricsRetention: Number(map['metricsRetention']) || 0,
+    logsRetention: Number(map['logsRetention']) || 0,
+    alarmsRetention: Number(map['alarmsRetention']) || 0,
+    backupFrequency: map['backupFrequency'] || '',
+    sessionTimeout: Number(map['sessionTimeout']) || 0,
+    passwordPolicy: map['passwordPolicy'] || '',
+    mfaRequired: map['mfaRequired'] === 'true',
+    alertAggregation: map['alertAggregation'] || '',
+    emailNotifications: map['emailNotifications'] === 'true',
+    smsAlerts: map['smsAlerts'] === 'true'
+  }
+}
+
+onMounted(async () => {
+  try {
+    await loadData()
+  } finally {
+    loading.value = false
+  }
+})
 </script>

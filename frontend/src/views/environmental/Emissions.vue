@@ -2,158 +2,174 @@
   <div class="emissions">
     <h2 class="mb-4">Emissions Breakdown</h2>
 
-    <!-- Scope Cards -->
-    <div class="row mb-4">
-      <div class="col-md-4">
-        <div class="card border-primary">
-          <div class="card-header bg-primary text-white">
-            <h5 class="mb-0">Scope 1 - Direct</h5>
-          </div>
-          <div class="card-body">
-            <div class="display-5 text-primary">24.3</div>
-            <p class="text-muted">Tonnes CO2e/year</p>
-            <small class="text-muted">17% of total</small>
-            <div class="mt-3">
-              <div class="small mb-2">
-                <div>Generators: 15.2 t</div>
-                <div>Vehicles: 6.1 t</div>
-                <div>Fugitive: 3.0 t</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="col-md-4">
-        <div class="card border-warning">
-          <div class="card-header bg-warning text-dark">
-            <h5 class="mb-0">Scope 2 - Indirect Energy</h5>
-          </div>
-          <div class="card-body">
-            <div class="display-5 text-warning">104.5</div>
-            <p class="text-muted">Tonnes CO2e/year</p>
-            <small class="text-muted">74% of total</small>
-            <div class="mt-3">
-              <div class="small mb-2">
-                <div>Grid Electricity: 89.2 t</div>
-                <div>Natural Gas: 15.3 t</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="col-md-4">
-        <div class="card border-danger">
-          <div class="card-header bg-danger text-white">
-            <h5 class="mb-0">Scope 3 - Supply Chain</h5>
-          </div>
-          <div class="card-body">
-            <div class="display-5 text-danger">13.2</div>
-            <p class="text-muted">Tonnes CO2e/year</p>
-            <small class="text-muted">9% of total</small>
-            <div class="mt-3">
-              <div class="small mb-2">
-                <div>Business Travel: 5.8 t</div>
-                <div>Waste: 4.2 t</div>
-                <div>Supplies: 3.2 t</div>
-              </div>
-            </div>
-          </div>
-        </div>
+    <div v-if="loading" class="text-center py-5">
+      <div class="spinner-border" role="status">
+        <span class="visually-hidden">Loading...</span>
       </div>
     </div>
 
-    <!-- Detailed Breakdown Table -->
-    <div class="card">
-      <div class="card-header">
-        <h5 class="mb-0">Complete Emissions Inventory</h5>
+    <template v-else>
+      <!-- Metrics Cards -->
+      <div class="row mb-4">
+        <div v-for="m in metrics.slice(0, 3)" :key="m.id" class="col-md-4">
+          <div class="card">
+            <div class="card-body">
+              <h5 class="card-title">{{ m.name }}</h5>
+              <div class="display-5" :class="m.status === 'on-track' ? 'text-success' : m.status === 'warning' ? 'text-warning' : 'text-danger'">{{ m.value }} {{ m.unit }}</div>
+              <p class="text-muted">Target: {{ m.target }}</p>
+              <span class="badge" :class="m.status === 'on-track' ? 'bg-success' : m.status === 'warning' ? 'bg-warning text-dark' : 'bg-danger'">{{ m.status }}</span>
+            </div>
+          </div>
+        </div>
       </div>
-      <div class="card-body">
-        <table class="table table-striped">
-          <thead>
-            <tr>
-              <th>Scope</th>
-              <th>Category</th>
-              <th>Activity</th>
-              <th>CO2e (tonnes/year)</th>
-              <th>% of Total</th>
-              <th>Trend</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><span class="badge bg-primary">1</span></td>
-              <td>Combustion</td>
-              <td>Backup Generators</td>
-              <td>15.2</td>
-              <td>10.7%</td>
-              <td><span class="text-success">↓ 8%</span></td>
-            </tr>
-            <tr>
-              <td><span class="badge bg-primary">1</span></td>
-              <td>Mobile</td>
-              <td>Fleet Vehicles</td>
-              <td>6.1</td>
-              <td>4.3%</td>
-              <td><span class="text-success">↓ 12%</span></td>
-            </tr>
-            <tr>
-              <td><span class="badge bg-primary">1</span></td>
-              <td>Fugitive</td>
-              <td>Refrigerant Leaks</td>
-              <td>3.0</td>
-              <td>2.1%</td>
-              <td><span class="text-danger">↑ 5%</span></td>
-            </tr>
-            <tr>
-              <td><span class="badge bg-warning">2</span></td>
-              <td>Energy</td>
-              <td>Grid Electricity</td>
-              <td>89.2</td>
-              <td>62.9%</td>
-              <td><span class="text-success">↓ 6%</span></td>
-            </tr>
-            <tr>
-              <td><span class="badge bg-warning">2</span></td>
-              <td>Energy</td>
-              <td>Natural Gas</td>
-              <td>15.3</td>
-              <td>10.8%</td>
-              <td><span class="text-danger">↑ 3%</span></td>
-            </tr>
-            <tr>
-              <td><span class="badge bg-danger">3</span></td>
-              <td>Transport</td>
-              <td>Business Travel</td>
-              <td>5.8</td>
-              <td>4.1%</td>
-              <td><span class="text-success">↓ 15%</span></td>
-            </tr>
-            <tr>
-              <td><span class="badge bg-danger">3</span></td>
-              <td>Waste</td>
-              <td>Landfill</td>
-              <td>4.2</td>
-              <td>3.0%</td>
-              <td><span class="text-success">↓ 18%</span></td>
-            </tr>
-            <tr>
-              <td><span class="badge bg-danger">3</span></td>
-              <td>Procurement</td>
-              <td>Equipment Supplies</td>
-              <td>3.2</td>
-              <td>2.3%</td>
-              <td><span class="text-neutral">→ 0%</span></td>
-            </tr>
-          </tbody>
-        </table>
+
+      <!-- All Emissions Metrics Table -->
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h5 class="mb-0">Complete Emissions Inventory</h5>
+          <button class="btn btn-sm btn-primary" @click="openCreate">+ Add</button>
+        </div>
+        <div class="card-body">
+          <table class="table table-striped">
+            <thead>
+              <tr>
+                <th>Metric</th>
+                <th>Category</th>
+                <th>Value</th>
+                <th>Unit</th>
+                <th>Target</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="m in metrics" :key="m.id">
+                <td>{{ m.name }}</td>
+                <td>{{ m.category }}</td>
+                <td><strong>{{ m.value }}</strong></td>
+                <td>{{ m.unit }}</td>
+                <td>{{ m.target }}</td>
+                <td>
+                  <span class="badge" :class="m.status === 'on-track' ? 'bg-success' : m.status === 'warning' ? 'bg-warning text-dark' : 'bg-danger'">{{ m.status }}</span>
+                </td>
+                <td>
+                  <button class="btn btn-sm btn-outline-secondary me-1" @click="openEdit(m)">Edit</button>
+                  <button class="btn btn-sm btn-outline-danger" @click="remove(m.id)">Delete</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </template>
+
+    <div v-if="showModal" class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">{{ editing ? 'Edit' : 'New' }} Metric</h5>
+            <button type="button" class="btn-close" @click="showModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">Category</label>
+              <input v-model="form.category" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Name</label>
+              <input v-model="form.name" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Value</label>
+              <input v-model="form.value" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Unit</label>
+              <input v-model="form.unit" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Target</label>
+              <input v-model="form.target" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Status</label>
+              <select v-model="form.status" class="form-select">
+                <option>on-track</option>
+                <option>warning</option>
+                <option>critical</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showModal = false">Cancel</button>
+            <button class="btn btn-primary" @click="save" :disabled="saving">
+              <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>
+              Save
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-// Mock data for Emissions component
-// No imports needed
+import { ref, computed, onMounted } from 'vue'
+import { sustainabilityMetricsApi, type SustainabilityMetric } from '../../services/api'
+
+const allMetrics = ref<SustainabilityMetric[]>([])
+const loading = ref(true)
+const showModal = ref(false)
+const saving = ref(false)
+const editing = ref<SustainabilityMetric | null>(null)
+
+const PAGE = 'emissions'
+const metrics = computed(() => allMetrics.value.filter(m => m.page === PAGE))
+
+const defaultForm = { category: '', name: '', value: '', unit: '', target: '', status: 'on-track', page: PAGE }
+const form = ref({ ...defaultForm })
+
+async function loadData() {
+  allMetrics.value = await sustainabilityMetricsApi.getAll()
+}
+
+onMounted(async () => {
+  try {
+    await loadData()
+  } finally {
+    loading.value = false
+  }
+})
+
+function openCreate() {
+  editing.value = null
+  form.value = { ...defaultForm }
+  showModal.value = true
+}
+
+function openEdit(m: SustainabilityMetric) {
+  editing.value = m
+  form.value = { category: m.category, name: m.name, value: m.value, unit: m.unit, target: m.target, status: m.status, page: PAGE }
+  showModal.value = true
+}
+
+async function save() {
+  saving.value = true
+  try {
+    if (editing.value) await sustainabilityMetricsApi.update(editing.value.id, form.value)
+    else await sustainabilityMetricsApi.create(form.value)
+    showModal.value = false
+    await loadData()
+  } finally {
+    saving.value = false
+  }
+}
+
+async function remove(id: number) {
+  if (!confirm('Are you sure?')) return
+  await sustainabilityMetricsApi.remove(id)
+  await loadData()
+}
 </script>
 
 <style scoped>

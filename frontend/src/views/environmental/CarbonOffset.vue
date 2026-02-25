@@ -2,133 +2,174 @@
   <div class="carbon-offset">
     <h2 class="mb-4">Carbon Offset Programs</h2>
 
-    <!-- Summary Cards -->
-    <div class="row mb-4">
-      <div class="col-md-3">
-        <div class="card">
-          <div class="card-body">
-            <h5 class="card-title">Purchased</h5>
-            <div class="display-5 text-info">185</div>
-            <p class="text-muted">Credits (tonnes)</p>
-          </div>
-        </div>
-      </div>
-      <div class="col-md-3">
-        <div class="card">
-          <div class="card-body">
-            <h5 class="card-title">Retired</h5>
-            <div class="display-5 text-success">142</div>
-            <p class="text-muted">Credits (tonnes)</p>
-          </div>
-        </div>
-      </div>
-      <div class="col-md-3">
-        <div class="card">
-          <div class="card-body">
-            <h5 class="card-title">Remaining</h5>
-            <div class="display-5 text-warning">43</div>
-            <p class="text-muted">Credits (tonnes)</p>
-          </div>
-        </div>
-      </div>
-      <div class="col-md-3">
-        <div class="card">
-          <div class="card-body">
-            <h5 class="card-title">Offset Ratio</h5>
-            <div class="display-5 text-primary">100%</div>
-            <p class="text-muted">Of emissions retired</p>
-          </div>
-        </div>
+    <div v-if="loading" class="text-center py-5">
+      <div class="spinner-border" role="status">
+        <span class="visually-hidden">Loading...</span>
       </div>
     </div>
 
-    <!-- Offset Progress -->
-    <div class="card mb-4">
-      <div class="card-header">
-        <h5 class="mb-0">Annual Offset Progress</h5>
-      </div>
-      <div class="card-body">
-        <div class="mb-3">
-          <div class="d-flex justify-content-between mb-2">
-            <span>Target Emissions</span>
-            <strong>142 tonnes CO2e</strong>
-          </div>
-          <div class="progress" style="height: 24px">
-            <div class="progress-bar bg-danger" role="progressbar" style="width: 100%" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100"></div>
-          </div>
-        </div>
-        <div>
-          <div class="d-flex justify-content-between mb-2">
-            <span>Offset Coverage</span>
-            <strong>142 tonnes CO2e</strong>
-          </div>
-          <div class="progress" style="height: 24px">
-            <div class="progress-bar bg-success" role="progressbar" style="width: 100%" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100"></div>
+    <template v-else>
+      <!-- Summary Cards -->
+      <div class="row mb-4">
+        <div v-for="m in metrics" :key="m.id" class="col-md-3">
+          <div class="card">
+            <div class="card-body">
+              <h5 class="card-title">{{ m.name }}</h5>
+              <div class="display-5" :class="m.status === 'on-track' ? 'text-success' : m.status === 'warning' ? 'text-warning' : 'text-info'">{{ m.value }} {{ m.unit }}</div>
+              <p class="text-muted">Target: {{ m.target }}</p>
+              <span class="badge" :class="m.status === 'on-track' ? 'bg-success' : m.status === 'warning' ? 'bg-warning text-dark' : 'bg-info'">{{ m.status }}</span>
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- Offset Projects List -->
-    <div class="card">
-      <div class="card-header">
-        <h5 class="mb-0">Active Offset Projects</h5>
+      <!-- Metrics Table -->
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h5 class="mb-0">Carbon Offset Metrics</h5>
+          <button class="btn btn-sm btn-primary" @click="openCreate">+ Add</button>
+        </div>
+        <div class="card-body">
+          <table class="table table-striped">
+            <thead>
+              <tr>
+                <th>Metric</th>
+                <th>Category</th>
+                <th>Value</th>
+                <th>Unit</th>
+                <th>Target</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="m in metrics" :key="m.id">
+                <td>{{ m.name }}</td>
+                <td>{{ m.category }}</td>
+                <td><strong>{{ m.value }}</strong></td>
+                <td>{{ m.unit }}</td>
+                <td>{{ m.target }}</td>
+                <td>
+                  <span class="badge" :class="m.status === 'on-track' ? 'bg-success' : m.status === 'warning' ? 'bg-warning text-dark' : 'bg-danger'">{{ m.status }}</span>
+                </td>
+                <td>
+                  <button class="btn btn-sm btn-outline-secondary me-1" @click="openEdit(m)">Edit</button>
+                  <button class="btn btn-sm btn-outline-danger" @click="remove(m.id)">Delete</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
-      <div class="card-body">
-        <table class="table table-striped">
-          <thead>
-            <tr>
-              <th>Project</th>
-              <th>Type</th>
-              <th>Credits Purchased</th>
-              <th>Credits Retired</th>
-              <th>Location</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Reforestation Initiative</td>
-              <td>Carbon Sequestration</td>
-              <td>65 tonnes</td>
-              <td>65 tonnes</td>
-              <td>Brazil</td>
-              <td><span class="badge bg-success">Verified</span></td>
-            </tr>
-            <tr>
-              <td>Methane Capture - Landfill</td>
-              <td>Methane Reduction</td>
-              <td>48 tonnes</td>
-              <td>48 tonnes</td>
-              <td>USA</td>
-              <td><span class="badge bg-success">Verified</span></td>
-            </tr>
-            <tr>
-              <td>Wind Farm Development</td>
-              <td>Renewable Energy</td>
-              <td>55 tonnes</td>
-              <td>29 tonnes</td>
-              <td>India</td>
-              <td><span class="badge bg-info">Active</span></td>
-            </tr>
-            <tr>
-              <td>Solar Installation - Schools</td>
-              <td>Renewable Energy</td>
-              <td>17 tonnes</td>
-              <td>0 tonnes</td>
-              <td>Kenya</td>
-              <td><span class="badge bg-warning">Pending</span></td>
-            </tr>
-          </tbody>
-        </table>
+    </template>
+
+    <div v-if="showModal" class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">{{ editing ? 'Edit' : 'New' }} Metric</h5>
+            <button type="button" class="btn-close" @click="showModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">Category</label>
+              <input v-model="form.category" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Name</label>
+              <input v-model="form.name" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Value</label>
+              <input v-model="form.value" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Unit</label>
+              <input v-model="form.unit" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Target</label>
+              <input v-model="form.target" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Status</label>
+              <select v-model="form.status" class="form-select">
+                <option>on-track</option>
+                <option>warning</option>
+                <option>critical</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showModal = false">Cancel</button>
+            <button class="btn btn-primary" @click="save" :disabled="saving">
+              <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>
+              Save
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-// Mock data for Carbon Offset component
-// No imports needed
+import { ref, computed, onMounted } from 'vue'
+import { sustainabilityMetricsApi, type SustainabilityMetric } from '../../services/api'
+
+const allMetrics = ref<SustainabilityMetric[]>([])
+const loading = ref(true)
+const showModal = ref(false)
+const saving = ref(false)
+const editing = ref<SustainabilityMetric | null>(null)
+
+const PAGE = 'carbon-offset'
+const metrics = computed(() => allMetrics.value.filter(m => m.page === PAGE))
+
+const defaultForm = { category: '', name: '', value: '', unit: '', target: '', status: 'on-track', page: PAGE }
+const form = ref({ ...defaultForm })
+
+async function loadData() {
+  allMetrics.value = await sustainabilityMetricsApi.getAll()
+}
+
+onMounted(async () => {
+  try {
+    await loadData()
+  } finally {
+    loading.value = false
+  }
+})
+
+function openCreate() {
+  editing.value = null
+  form.value = { ...defaultForm }
+  showModal.value = true
+}
+
+function openEdit(m: SustainabilityMetric) {
+  editing.value = m
+  form.value = { category: m.category, name: m.name, value: m.value, unit: m.unit, target: m.target, status: m.status, page: PAGE }
+  showModal.value = true
+}
+
+async function save() {
+  saving.value = true
+  try {
+    if (editing.value) await sustainabilityMetricsApi.update(editing.value.id, form.value)
+    else await sustainabilityMetricsApi.create(form.value)
+    showModal.value = false
+    await loadData()
+  } finally {
+    saving.value = false
+  }
+}
+
+async function remove(id: number) {
+  if (!confirm('Are you sure?')) return
+  await sustainabilityMetricsApi.remove(id)
+  await loadData()
+}
 </script>
 
 <style scoped>

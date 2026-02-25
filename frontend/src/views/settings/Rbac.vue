@@ -5,10 +5,16 @@
         <h1 class="h3 mb-0">Roles and Permissions</h1>
       </div>
       <div class="col-auto">
-        <button class="btn btn-primary btn-sm">+ Add Role</button>
+        <button class="btn btn-primary btn-sm" @click="openCreate">+ Add Role</button>
       </div>
     </div>
 
+    <div v-if="loading" class="text-center py-5">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+    </div>
+    <template v-else>
     <div class="card">
       <div class="card-body">
         <div class="table-responsive">
@@ -57,7 +63,8 @@
                   </span>
                 </td>
                 <td>
-                  <button class="btn btn-sm btn-outline-secondary">Edit</button>
+                  <button class="btn btn-sm btn-outline-primary me-1" @click="openEdit(role)">Edit</button>
+                  <button class="btn btn-sm btn-outline-danger" @click="remove(role.id)">Delete</button>
                 </td>
               </tr>
             </tbody>
@@ -65,60 +72,110 @@
         </div>
       </div>
     </div>
+    </template>
+
+    <!-- Modal -->
+    <div v-if="showModal" class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">{{ editing ? 'Edit' : 'Add' }} Role</h5>
+            <button type="button" class="btn-close" @click="showModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">Name</label>
+              <input v-model="form.name" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">User Count</label>
+              <input v-model.number="form.userCount" type="number" class="form-control" />
+            </div>
+            <div class="form-check mb-2">
+              <input v-model="form.dashboard" type="checkbox" class="form-check-input" id="fDashboard" />
+              <label class="form-check-label" for="fDashboard">Dashboard</label>
+            </div>
+            <div class="form-check mb-2">
+              <input v-model="form.power" type="checkbox" class="form-check-input" id="fPower" />
+              <label class="form-check-label" for="fPower">Power</label>
+            </div>
+            <div class="form-check mb-2">
+              <input v-model="form.cooling" type="checkbox" class="form-check-input" id="fCooling" />
+              <label class="form-check-label" for="fCooling">Cooling</label>
+            </div>
+            <div class="form-check mb-2">
+              <input v-model="form.space" type="checkbox" class="form-check-input" id="fSpace" />
+              <label class="form-check-label" for="fSpace">Space</label>
+            </div>
+            <div class="form-check mb-2">
+              <input v-model="form.security" type="checkbox" class="form-check-input" id="fSecurity" />
+              <label class="form-check-label" for="fSecurity">Security</label>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showModal = false">Cancel</button>
+            <button class="btn btn-primary" @click="save" :disabled="saving">
+              <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-const roles = [
-  {
-    id: 1,
-    name: 'Administrator',
-    userCount: 2,
-    dashboard: true,
-    power: true,
-    cooling: true,
-    space: true,
-    security: true
-  },
-  {
-    id: 2,
-    name: 'Operator',
-    userCount: 5,
-    dashboard: true,
-    power: true,
-    cooling: true,
-    space: false,
-    security: false
-  },
-  {
-    id: 3,
-    name: 'Engineer',
-    userCount: 3,
-    dashboard: true,
-    power: true,
-    cooling: true,
-    space: true,
-    security: true
-  },
-  {
-    id: 4,
-    name: 'Viewer',
-    userCount: 8,
-    dashboard: true,
-    power: false,
-    cooling: false,
-    space: false,
-    security: false
-  },
-  {
-    id: 5,
-    name: 'Auditor',
-    userCount: 1,
-    dashboard: true,
-    power: false,
-    cooling: false,
-    space: true,
-    security: true
+import { ref, onMounted } from 'vue'
+import { rbacRolesApi, type RbacRole } from '../../services/api'
+
+const roles = ref<RbacRole[]>([])
+const loading = ref(true)
+const showModal = ref(false)
+const saving = ref(false)
+const editing = ref<RbacRole | null>(null)
+const defaultForm = { name: '', userCount: 0, dashboard: false, power: false, cooling: false, space: false, security: false }
+const form = ref({ ...defaultForm })
+
+function openCreate() {
+  editing.value = null
+  form.value = { ...defaultForm }
+  showModal.value = true
+}
+
+function openEdit(item: RbacRole) {
+  editing.value = item
+  form.value = { name: item.name, userCount: item.userCount, dashboard: item.dashboard, power: item.power, cooling: item.cooling, space: item.space, security: item.security }
+  showModal.value = true
+}
+
+async function save() {
+  saving.value = true
+  try {
+    if (editing.value) await rbacRolesApi.update(editing.value.id, form.value)
+    else await rbacRolesApi.create(form.value)
+    showModal.value = false
+    await loadData()
+  } finally {
+    saving.value = false
   }
-];
+}
+
+async function remove(id: number) {
+  if (!confirm('Are you sure?')) return
+  await rbacRolesApi.remove(id)
+  await loadData()
+}
+
+async function loadData() {
+  roles.value = await rbacRolesApi.getAll()
+}
+
+onMounted(async () => {
+  try {
+    await loadData()
+  } finally {
+    loading.value = false
+  }
+})
 </script>

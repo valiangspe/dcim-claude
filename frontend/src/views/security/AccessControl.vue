@@ -1,24 +1,54 @@
 <script setup lang="ts">
-const roles = [
-  { id: 1, name: 'Administrator', permissionCount: 89, userCount: 3, description: 'Full system access', status: 'active' },
-  { id: 2, name: 'Security Manager', permissionCount: 45, userCount: 5, description: 'Security operations', status: 'active' },
-  { id: 3, name: 'Network Admin', permissionCount: 34, userCount: 8, description: 'Network management', status: 'active' },
-  { id: 4, name: 'Data Center Tech', permissionCount: 22, userCount: 12, description: 'Facility operations', status: 'active' },
-  { id: 5, name: 'Security Analyst', permissionCount: 28, userCount: 6, description: 'Threat monitoring', status: 'active' },
-  { id: 6, name: 'Auditor', permissionCount: 15, userCount: 2, description: 'Compliance audits', status: 'active' },
-  { id: 7, name: 'Guest Access', permissionCount: 3, userCount: 0, description: 'Limited visitor access', status: 'inactive' },
-]
+import { ref, onMounted } from 'vue'
+import { accessRolesApi, type AccessRole, accessRoleUsersApi, type AccessRoleUser } from '../../services/api'
 
-const usersByRole = [
-  { name: 'admin-001', role: 'Administrator', department: 'IT Security', lastLogin: '2026-02-20 14:23', status: 'active' },
-  { name: 'admin-002', role: 'Administrator', department: 'IT Security', lastLogin: '2026-02-20 09:15', status: 'active' },
-  { name: 'admin-003', role: 'Administrator', department: 'IT Security', lastLogin: '2026-02-19 16:42', status: 'active' },
-  { name: 'secmgr-001', role: 'Security Manager', department: 'Security', lastLogin: '2026-02-20 15:01', status: 'active' },
-  { name: 'secmgr-002', role: 'Security Manager', department: 'Security', lastLogin: '2026-02-20 14:30', status: 'active' },
-  { name: 'netadmin-001', role: 'Network Admin', department: 'Network Operations', lastLogin: '2026-02-20 13:45', status: 'active' },
-  { name: 'tech-001', role: 'Data Center Tech', department: 'Facilities', lastLogin: '2026-02-20 15:20', status: 'active' },
-  { name: 'analyst-001', role: 'Security Analyst', department: 'Security', lastLogin: '2026-02-20 12:15', status: 'active' },
-]
+const roles = ref<AccessRole[]>([])
+const usersByRole = ref<AccessRoleUser[]>([])
+const loading = ref(true)
+
+const showModal = ref(false)
+const saving = ref(false)
+const editing = ref<AccessRole | null>(null)
+const defaultForm = { name: '', permissionCount: 0, userCount: 0, description: '', status: 'active' }
+const form = ref({ ...defaultForm })
+
+async function loadData() {
+  const [r, u] = await Promise.all([accessRolesApi.getAll(), accessRoleUsersApi.getAll()])
+  roles.value = r
+  usersByRole.value = u
+}
+
+onMounted(async () => { try { await loadData() } finally { loading.value = false } })
+
+function openCreate() {
+  editing.value = null
+  form.value = { ...defaultForm }
+  showModal.value = true
+}
+
+function openEdit(role: AccessRole) {
+  editing.value = role
+  form.value = { name: role.name, permissionCount: role.permissionCount, userCount: role.userCount, description: role.description, status: role.status }
+  showModal.value = true
+}
+
+async function save() {
+  saving.value = true
+  try {
+    if (editing.value) await accessRolesApi.update(editing.value.id, form.value)
+    else await accessRolesApi.create(form.value)
+    showModal.value = false
+    await loadData()
+  } finally {
+    saving.value = false
+  }
+}
+
+async function remove(id: number) {
+  if (!confirm('Are you sure?')) return
+  await accessRolesApi.remove(id)
+  await loadData()
+}
 
 const statusColor = {
   active: 'success',
@@ -29,6 +59,9 @@ const statusColor = {
 <template>
   <div>
     <h4 class="mb-4">Access Control</h4>
+
+    <div v-if="loading" class="text-center py-5"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>
+    <template v-else>
 
     <!-- Summary Stats -->
     <div class="row g-3 mb-4">
@@ -68,7 +101,10 @@ const statusColor = {
 
     <!-- Roles Table -->
     <div class="card border-0 shadow-sm mb-4">
-      <div class="card-header bg-transparent fw-semibold">Roles & Permissions</div>
+      <div class="card-header bg-transparent fw-semibold d-flex align-items-center justify-content-between">
+        <span>Roles & Permissions</span>
+        <button class="btn btn-sm btn-primary" @click="openCreate">+ Add Role</button>
+      </div>
       <div class="card-body p-0">
         <table class="table table-hover align-middle mb-0">
           <thead class="table-light">
@@ -78,6 +114,7 @@ const statusColor = {
               <th>Permissions</th>
               <th>Users</th>
               <th>Status</th>
+              <th style="width:120px">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -97,6 +134,10 @@ const statusColor = {
                 <span v-else class="text-muted">---</span>
               </td>
               <td><span class="badge" :class="`bg-${statusColor[role.status as keyof typeof statusColor]}`">{{ role.status }}</span></td>
+              <td>
+                <button class="btn btn-sm btn-outline-primary me-1" @click="openEdit(role)">Edit</button>
+                <button class="btn btn-sm btn-outline-danger" @click="remove(role.id)">Delete</button>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -127,6 +168,51 @@ const statusColor = {
             </tr>
           </tbody>
         </table>
+      </div>
+    </div>
+    </template>
+
+    <!-- Modal -->
+    <div v-if="showModal" class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">{{ editing ? 'Edit' : 'Add' }} Role</h5>
+            <button type="button" class="btn-close" @click="showModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">Name</label>
+              <input v-model="form.name" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Description</label>
+              <input v-model="form.description" type="text" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Permission Count</label>
+              <input v-model.number="form.permissionCount" type="number" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">User Count</label>
+              <input v-model.number="form.userCount" type="number" class="form-control" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Status</label>
+              <select v-model="form.status" class="form-select">
+                <option value="active">active</option>
+                <option value="inactive">inactive</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showModal = false">Cancel</button>
+            <button class="btn btn-primary" @click="save" :disabled="saving">
+              <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>
+              Save
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </div>

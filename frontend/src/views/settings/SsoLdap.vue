@@ -2,6 +2,12 @@
   <div class="container-fluid py-4">
     <h1 class="h3 mb-4">SSO / LDAP Configuration</h1>
 
+    <div v-if="loading" class="text-center py-5">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+    </div>
+    <template v-else>
     <div class="row">
       <div class="col-lg-6">
         <div class="card mb-4">
@@ -97,10 +103,15 @@
         </div>
       </div>
     </div>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
+import { ref, onMounted } from 'vue'
+
+const loading = ref(true)
+
 const ldap = {
   server: 'ldap.company.local:389',
   baseDn: 'cn=users,dc=company,dc=local',
@@ -120,4 +131,12 @@ const stats = {
   ssoUsers: 23,
   lastSync: '2026-02-20 14:30'
 };
+
+onMounted(async () => {
+  try {
+    // Data is hardcoded for this complex config page
+  } finally {
+    loading.value = false
+  }
+})
 </script>
