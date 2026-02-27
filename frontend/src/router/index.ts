@@ -133,6 +133,7 @@ import UtilHeatmap from '../views/visualization/UtilHeatmap.vue'
 import VisTopology from '../views/visualization/VisTopology.vue'
 import CustomWidgets from '../views/visualization/CustomWidgets.vue'
 import WeatherWidgets from '../views/visualization/WeatherWidgets.vue'
+import ContainerMap from '../views/visualization/ContainerMap.vue'
 
 const routes = [
   {
@@ -291,6 +292,7 @@ const routes = [
       { path: 'visualization/topology', component: VisTopology, meta: { title: 'Network Topology', module: 'Visualization', requiredTier: 'platinum', description: 'Network topology diagram' } },
       { path: 'visualization/widgets', component: CustomWidgets, meta: { title: 'Custom Widgets', module: 'Visualization', requiredTier: 'platinum', description: 'Custom HTML widgets' } },
       { path: 'visualization/weather', component: WeatherWidgets, meta: { title: 'Weather Widgets', module: 'Visualization', requiredTier: 'platinum', description: 'Weather / external data widgets' } },
+      { path: 'visualization/container-map', component: ContainerMap, meta: { title: 'Container Map', module: 'Visualization', requiredTier: 'plus', description: 'Interactive container layout with component-level details' } },
     ],
   },
 ]

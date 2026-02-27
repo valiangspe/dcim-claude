@@ -235,6 +235,7 @@ export const menuItems: MenuItem[] = [
       { label: 'Network Topology', route: '/visualization/topology', tier: 'platinum', icon: '' },
       { label: 'Custom Widgets', route: '/visualization/widgets', tier: 'platinum', icon: '' },
       { label: 'Weather Widgets', route: '/visualization/weather', tier: 'platinum', icon: '' },
+      { label: 'Container Map', route: '/visualization/container-map', tier: 'plus', icon: '' },
     ],
   },
 ]
