@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, ref } from 'vue'
+import { onMounted, onBeforeUnmount, ref, nextTick } from 'vue'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { sitesApi, type Site } from '../../services/api'
@@ -84,6 +84,7 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+  await nextTick()   // wait for DOM to update
   initMap()
 })
 
@@ -130,7 +131,9 @@ async function remove(id: number) {
   <div>
     <h4 class="mb-4">Global Map</h4>
 
-    <div v-if="loading" class="text-center py-5"><div class="spinner-border"></div></div>
+    <div v-if="loading" class="text-center py-5">
+      <div class="spinner-border"></div>
+    </div>
     <template v-else>
       <!-- Map -->
       <div class="card border-0 shadow-sm mb-4">
