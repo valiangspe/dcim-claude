@@ -6,6 +6,6 @@ public class User
     public required string Name { get; set; }
     public required string Email { get; set; }
     public required string Role { get; set; }
-    public required string LastLogin { get; set; }
+    public string? LastLogin { get; set; }
     public required string Status { get; set; }
 }
