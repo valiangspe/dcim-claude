@@ -309,3 +309,22 @@ export const sustainabilityMetricsApi = crudApi<SustainabilityMetric>('sustainab
 export async function seedDatabase() {
   return fetchApi<{ seeded: boolean }>('/seed', { method: 'POST' })
 }
+
+// ── Timeseries (InfluxDB) ──
+export interface TemperatureReading {
+  time: string
+  sensorId: string
+  cabinet: string
+  inlet: number
+  outlet: number
+  delta: number
+}
+
+export const timeseriesApi = {
+  getTemperature: (range = '24h') =>
+    fetchApi<TemperatureReading[]>(`/timeseries/temperature?range=${range}`),
+  writeTemperature: (data: { sensorId: string; cabinet: string; inlet: number; outlet: number }) =>
+    fetchApi<unknown>('/timeseries/temperature', { method: 'POST', body: JSON.stringify(data) }),
+  seedTemperature: () =>
+    fetchApi<{ written: number }>('/timeseries/temperature/seed', { method: 'POST' }),
+}

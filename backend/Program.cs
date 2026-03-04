@@ -1,3 +1,4 @@
+using backend;
 using backend.Data;
 using backend.Models;
 using Microsoft.EntityFrameworkCore;
@@ -1067,6 +1068,9 @@ app.MapPost("/api/seed", async (AppDbContext db) =>
 
     return Results.Ok(new { seeded = true });
 });
+
+// ── Timeseries endpoints (InfluxDB) ──
+app.MapTimeseriesEndpoints();
 
 // SPA fallback: serve index.html for non-API routes
 app.MapFallbackToFile("index.html");
