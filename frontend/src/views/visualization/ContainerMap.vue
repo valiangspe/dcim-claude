@@ -6,55 +6,36 @@
           <span v-if="selectedContainer" role="button" @click="selectedContainer = null" class="text-primary me-2">&larr;</span>
           {{ selectedContainer ? selectedContainer.name : 'Container Map' }}
         </h1>
-        <small class="text-muted" v-if="!selectedContainer">Room Layout — Click a container to inspect</small>
+        <small class="text-muted" v-if="!selectedContainer">Room Layout — 50 × 2 stacked containers. Click to inspect.</small>
         <small class="text-muted" v-else>Click on any component for details</small>
       </div>
-      <div>
-        <select v-if="!selectedContainer" class="form-select form-select-sm" style="width:auto" v-model="selectedRoom">
+      <div v-if="!selectedContainer" class="d-flex align-items-center gap-3">
+        <div class="d-flex align-items-center gap-2 small text-muted">
+          <span class="status-dot bg-success"></span>Healthy ({{ healthyCnt }})
+          <span class="status-dot bg-warning ms-2"></span>Warning ({{ warningCnt }})
+          <span class="status-dot bg-danger ms-2"></span>Critical ({{ criticalCnt }})
+        </div>
+        <select class="form-select form-select-sm" style="width:auto" v-model="selectedRoom">
           <option value="all">All Rooms</option>
           <option v-for="r in rooms" :key="r" :value="r">{{ r }}</option>
         </select>
       </div>
     </div>
 
-    <!-- Room Overview -->
+    <!-- Container Map: 50 columns × 2 rows (top/bottom pairs) -->
     <div v-if="!selectedContainer">
-      <div class="row g-3">
-        <div v-for="c in filteredContainers" :key="c.id" class="col-lg-4 col-md-6">
-          <div class="card h-100 border-0 shadow-sm container-card" @click="selectedContainer = c" role="button">
-            <div class="card-body">
-              <div class="d-flex justify-content-between align-items-start mb-3">
-                <div>
-                  <h5 class="mb-0">{{ c.name }}</h5>
-                  <small class="text-muted">{{ c.room }} &middot; {{ c.type }}</small>
-                </div>
-                <span :class="['badge', c.status === 'Healthy' ? 'bg-success' : c.status === 'Warning' ? 'bg-warning' : 'bg-danger']">
-                  {{ c.status }}
-                </span>
-              </div>
-              <!-- Container visual preview using actual image -->
-              <div class="container-preview mb-3" :style="{ borderColor: c.status === 'Healthy' ? '#198754' : c.status === 'Warning' ? '#ffc107' : '#dc3545' }">
-                <img src="/dc.png" alt="Container" class="w-100 h-100" style="object-fit:cover; border-radius:4px;" />
-              </div>
-              <!-- Vital stats -->
-              <div class="row g-2 text-center">
-                <div class="col-3">
-                  <div class="small text-muted">Temp</div>
-                  <div class="fw-bold" :class="c.temp > 28 ? 'text-danger' : c.temp > 25 ? 'text-warning' : 'text-success'">{{ c.temp }}°C</div>
-                </div>
-                <div class="col-3">
-                  <div class="small text-muted">Power</div>
-                  <div class="fw-bold">{{ c.powerKw }} kW</div>
-                </div>
-                <div class="col-3">
-                  <div class="small text-muted">Network</div>
-                  <div class="fw-bold" :class="c.networkHealth >= 95 ? 'text-success' : c.networkHealth >= 80 ? 'text-warning' : 'text-danger'">{{ c.networkHealth }}%</div>
-                </div>
-                <div class="col-3">
-                  <div class="small text-muted">Util</div>
-                  <div class="fw-bold">{{ c.utilization }}%</div>
-                </div>
-              </div>
+      <div class="card border-0 shadow-sm p-3" style="background:#343a40;">
+        <div class="pair-grid">
+          <div v-for="col in 50" :key="col" class="pair-col">
+            <div
+              v-for="c in [containers[col - 1]!, containers[col + 49]!]" :key="c.id"
+              class="container-cell"
+              :class="{ dimmed: selectedRoom !== 'all' && c.room !== selectedRoom }"
+              :title="`${c.name} — ${c.status} | ${c.temp}°C | ${c.powerKw} kW | ${c.utilization}% util`"
+              @click="selectedRoom === 'all' || c.room === selectedRoom ? selectedContainer = c : null"
+            >
+              <span class="status-dot" :class="statusDotClass(c.status)"></span>
+              <span class="cell-num">{{ c.num }}</span>
             </div>
           </div>
         </div>
@@ -75,12 +56,11 @@
         </div>
       </div>
 
-      <!-- Interactive image with hotspot overlays -->
+      <!-- Interactive hotspot map -->
       <div class="card border-0 shadow-sm">
         <div class="card-body p-3">
           <div class="image-map-wrapper">
             <img src="/dc.png" alt="Data Center Container" class="container-img" />
-            <!-- Clickable hotspot zones (positioned by % relative to image) -->
             <div v-for="zone in hotspotZones" :key="zone.id"
                  class="hotspot-zone"
                  :class="{ 'hotspot-hover': hoverZone === zone.id }"
@@ -132,12 +112,12 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 
-// --- Room / Container overview ---
-const rooms = ['Room A', 'Room B', 'Room C']
+const rooms = ['Room A', 'Room B', 'Room C', 'Room D', 'Room E']
 const selectedRoom = ref('all')
 
 interface Container {
   id: number
+  num: number
   name: string
   room: string
   type: string
@@ -148,18 +128,43 @@ interface Container {
   utilization: number
 }
 
-const containers = ref<Container[]>([
-  { id: 1, name: 'CTR-A01', room: 'Room A', type: '40ft High-Density', status: 'Healthy', temp: 22, powerKw: 85, networkHealth: 99, utilization: 72 },
-  { id: 2, name: 'CTR-A02', room: 'Room A', type: '40ft Standard', status: 'Warning', temp: 27, powerKw: 92, networkHealth: 94, utilization: 88 },
-  { id: 3, name: 'CTR-A03', room: 'Room A', type: '20ft Edge', status: 'Healthy', temp: 21, powerKw: 45, networkHealth: 100, utilization: 55 },
-  { id: 4, name: 'CTR-B01', room: 'Room B', type: '40ft High-Density', status: 'Critical', temp: 31, powerKw: 110, networkHealth: 78, utilization: 95 },
-  { id: 5, name: 'CTR-B02', room: 'Room B', type: '40ft Standard', status: 'Healthy', temp: 23, powerKw: 78, networkHealth: 98, utilization: 65 },
-  { id: 6, name: 'CTR-C01', room: 'Room C', type: '20ft Edge', status: 'Healthy', temp: 20, powerKw: 38, networkHealth: 100, utilization: 42 },
-])
+function makeStatus(seed: number): 'Healthy' | 'Warning' | 'Critical' {
+  const v = (seed * 37 + 13) % 100
+  if (v < 10) return 'Critical'
+  if (v < 25) return 'Warning'
+  return 'Healthy'
+}
 
-const filteredContainers = computed(() =>
-  selectedRoom.value === 'all' ? containers.value : containers.value.filter(c => c.room === selectedRoom.value)
-)
+const TYPES = ['40ft High-Density', '40ft Standard', '20ft Edge', '40ft Compute', '20ft Storage']
+
+const containers: Container[] = Array.from({ length: 100 }, (_, i) => {
+  const num = i + 1
+  const seed = num * 17 + 3
+  const roomIdx = Math.floor(((seed * 7) % 100) / 20)
+  const status = makeStatus(seed)
+  return {
+    id: num,
+    num,
+    name: `CTR-${String(num).padStart(3, '0')}`,
+    room: rooms[roomIdx] as string,
+    type: TYPES[seed % TYPES.length] as string,
+    status,
+    temp: status === 'Critical' ? 29 + (seed % 5) : status === 'Warning' ? 26 + (seed % 3) : 20 + (seed % 5),
+    powerKw: 30 + (seed % 90),
+    networkHealth: status === 'Critical' ? 70 + (seed % 15) : status === 'Warning' ? 85 + (seed % 10) : 95 + (seed % 5),
+    utilization: status === 'Critical' ? 88 + (seed % 12) : status === 'Warning' ? 70 + (seed % 20) : 40 + (seed % 45),
+  }
+})
+
+const healthyCnt = computed(() => containers.filter(c => c.status === 'Healthy').length)
+const warningCnt = computed(() => containers.filter(c => c.status === 'Warning').length)
+const criticalCnt = computed(() => containers.filter(c => c.status === 'Critical').length)
+
+function statusDotClass(status: Container['status']) {
+  if (status === 'Critical') return 'bg-danger'
+  if (status === 'Warning') return 'bg-warning'
+  return 'bg-success'
+}
 
 const selectedContainer = ref<Container | null>(null)
 
@@ -174,8 +179,7 @@ const containerStats = computed(() => {
   ]
 })
 
-// --- Hotspot zones (% positions mapped to the dc.png image) ---
-// Image layout: door/panels on left ~0-18%, server racks in middle ~18-78%, cooling pipes top ~18-78%, battery/UPS right ~78-100%
+// Hotspot zones
 interface HotspotZone {
   id: string
   label: string
@@ -185,48 +189,35 @@ interface HotspotZone {
 }
 
 const hotspotZones: HotspotZone[] = [
-  // Door
-  { id: 'door', label: 'Door', x: 1, y: 10, w: 8, h: 85, type: 'door' },
-  // Fire suppression panel (red box)
-  { id: 'fire', label: 'Fire Panel', x: 9, y: 12, w: 5, h: 40, type: 'fire-panel' },
-  // Electrical panel
-  { id: 'electrical', label: 'Electrical', x: 9, y: 55, w: 8, h: 40, type: 'electrical' },
-  // Server racks (7 racks spanning the middle)
-  { id: 'rack1', label: 'Rack 1', x: 19, y: 10, w: 7.5, h: 85, type: 'server', rackIndex: 0 },
-  { id: 'rack2', label: 'Rack 2', x: 27, y: 10, w: 7.5, h: 85, type: 'server', rackIndex: 1 },
-  { id: 'rack3', label: 'Rack 3', x: 35, y: 10, w: 7.5, h: 85, type: 'server', rackIndex: 2 },
-  { id: 'rack4', label: 'Rack 4', x: 43, y: 10, w: 7.5, h: 85, type: 'server', rackIndex: 3 },
-  { id: 'rack5', label: 'Rack 5', x: 51, y: 10, w: 7.5, h: 85, type: 'server', rackIndex: 4 },
-  { id: 'rack6', label: 'Rack 6', x: 59, y: 10, w: 7.5, h: 85, type: 'server', rackIndex: 5 },
-  { id: 'rack7', label: 'Rack 7', x: 67, y: 10, w: 7.5, h: 85, type: 'server', rackIndex: 6 },
-  // Cooling (top pipes area)
-  { id: 'cooling', label: 'Cooling Pipes', x: 19, y: 0, w: 56, h: 10, type: 'cooling' },
-  // Battery / UPS (right section - yellow modules)
-  { id: 'battery', label: 'UPS / Battery', x: 78, y: 5, w: 21, h: 90, type: 'battery' },
+  { id: 'door',       label: 'Door',        x: 1,  y: 10, w: 8,   h: 85, type: 'door' },
+  { id: 'fire',       label: 'Fire Panel',  x: 9,  y: 12, w: 5,   h: 40, type: 'fire-panel' },
+  { id: 'electrical', label: 'Electrical',  x: 9,  y: 55, w: 8,   h: 40, type: 'electrical' },
+  { id: 'rack1',      label: 'Rack 1',      x: 19, y: 10, w: 7.5, h: 85, type: 'server', rackIndex: 0 },
+  { id: 'rack2',      label: 'Rack 2',      x: 27, y: 10, w: 7.5, h: 85, type: 'server', rackIndex: 1 },
+  { id: 'rack3',      label: 'Rack 3',      x: 35, y: 10, w: 7.5, h: 85, type: 'server', rackIndex: 2 },
+  { id: 'rack4',      label: 'Rack 4',      x: 43, y: 10, w: 7.5, h: 85, type: 'server', rackIndex: 3 },
+  { id: 'rack5',      label: 'Rack 5',      x: 51, y: 10, w: 7.5, h: 85, type: 'server', rackIndex: 4 },
+  { id: 'rack6',      label: 'Rack 6',      x: 59, y: 10, w: 7.5, h: 85, type: 'server', rackIndex: 5 },
+  { id: 'rack7',      label: 'Rack 7',      x: 67, y: 10, w: 7.5, h: 85, type: 'server', rackIndex: 6 },
+  { id: 'cooling',    label: 'Cooling',     x: 19, y: 0,  w: 56,  h: 10, type: 'cooling' },
+  { id: 'battery',    label: 'UPS / Battery', x: 78, y: 5, w: 21, h: 90, type: 'battery' },
 ]
 
 const hoverZone = ref<string | null>(null)
 
-// --- Rack mock data ---
 interface RackUnit { slot: number; type: 'server' | 'network' | 'storage'; active: boolean }
 interface Rack { label: string; units: RackUnit[] }
 
 function makeRack(label: string): Rack {
-  const units: RackUnit[] = []
   const types: RackUnit['type'][] = ['server', 'server', 'server', 'network', 'server', 'server', 'storage', 'server', 'server', 'server']
-  for (let i = 0; i < 10; i++) {
-    units.push({ slot: i, type: types[i], active: Math.random() > 0.15 })
-  }
-  return { label, units }
+  return { label, units: types.map((type, slot) => ({ slot, type, active: Math.random() > 0.15 })) }
 }
 
 const containerRacks: Rack[] = [
   makeRack('Rack 1'), makeRack('Rack 2'), makeRack('Rack 3'),
-  makeRack('Rack 4'), makeRack('Rack 5'), makeRack('Rack 6'),
-  makeRack('Rack 7'),
+  makeRack('Rack 4'), makeRack('Rack 5'), makeRack('Rack 6'), makeRack('Rack 7'),
 ]
 
-// --- Popup system ---
 interface PopupRow { label: string; value: string; color?: string }
 interface PopupBar { label: string; value: number }
 interface PopupData { title: string; headerColor: string; rows: PopupRow[]; bars?: PopupBar[] }
@@ -256,8 +247,7 @@ function showPopup(zone: HotspotZone, event: MouseEvent) {
     const mins = Math.floor(Math.random() * 120) + 5
     const person = accessNames[Math.floor(Math.random() * accessNames.length)]
     popup.value = {
-      title: 'Container Door',
-      headerColor: '#6c757d',
+      title: 'Container Door', headerColor: '#6c757d',
       rows: [
         { label: 'Status', value: 'Locked', color: 'text-success' },
         { label: 'Last Access', value: `${mins}m ago by ${person}` },
@@ -269,8 +259,7 @@ function showPopup(zone: HotspotZone, event: MouseEvent) {
     }
   } else if (zone.type === 'fire-panel') {
     popup.value = {
-      title: 'Fire Suppression Panel',
-      headerColor: '#dc3545',
+      title: 'Fire Suppression Panel', headerColor: '#dc3545',
       rows: [
         { label: 'System', value: 'FM-200 (HFC-227ea)' },
         { label: 'Status', value: 'Armed — Standby', color: 'text-success' },
@@ -283,8 +272,7 @@ function showPopup(zone: HotspotZone, event: MouseEvent) {
     }
   } else if (zone.type === 'electrical') {
     popup.value = {
-      title: 'Electrical Distribution Panel',
-      headerColor: '#495057',
+      title: 'Electrical Distribution Panel', headerColor: '#495057',
       rows: [
         { label: 'Supply', value: '3-Phase 400V / 63A' },
         { label: 'Main Breaker', value: 'ON', color: 'text-success' },
@@ -298,6 +286,7 @@ function showPopup(zone: HotspotZone, event: MouseEvent) {
     }
   } else if (zone.type === 'server' && zone.rackIndex !== undefined) {
     const rack = containerRacks[zone.rackIndex]
+    if (!rack) return
     const cpu = Math.floor(Math.random() * 60) + 20
     const mem = Math.floor(Math.random() * 40) + 40
     const disk = Math.floor(Math.random() * 50) + 30
@@ -323,8 +312,7 @@ function showPopup(zone: HotspotZone, event: MouseEvent) {
     }
   } else if (zone.type === 'cooling') {
     popup.value = {
-      title: 'Cooling System',
-      headerColor: '#0288D1',
+      title: 'Cooling System', headerColor: '#0288D1',
       rows: [
         { label: 'Type', value: 'In-Row Cooling (DX)' },
         { label: 'Supply Temp', value: '16°C', color: 'text-primary' },
@@ -338,8 +326,7 @@ function showPopup(zone: HotspotZone, event: MouseEvent) {
     }
   } else if (zone.type === 'battery') {
     popup.value = {
-      title: 'UPS / Battery Bank',
-      headerColor: '#F9A825',
+      title: 'UPS / Battery Bank', headerColor: '#F9A825',
       rows: [
         { label: 'UPS Model', value: 'Eaton 9395P 200kVA' },
         { label: 'Status', value: 'Online — Normal', color: 'text-success' },
@@ -360,23 +347,78 @@ function showPopup(zone: HotspotZone, event: MouseEvent) {
 </script>
 
 <style scoped>
-.container-card {
-  transition: transform 0.15s, box-shadow 0.15s;
-}
-.container-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 6px 20px rgba(0,0,0,0.12) !important;
+/* ── Container grid ── */
+.pair-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
-.container-preview {
-  border: 2px solid;
-  border-radius: 6px;
-  height: 70px;
+.pair-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid #ced4da;
+  border-radius: 5px;
   overflow: hidden;
-  background: #000;
+  background: #fff;
 }
 
-/* Image map wrapper */
+.pair-col .container-cell {
+  border: none;
+  border-radius: 0;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.pair-col .container-cell:last-child {
+  border-bottom: none;
+}
+
+.container-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 44px;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, transform 0.1s;
+  background: #f8f9fa;
+  gap: 2px;
+}
+
+.container-cell:hover {
+  background: #e9ecef;
+  border-color: #0d6efd;
+  transform: scale(1.15);
+  z-index: 10;
+  position: relative;
+}
+
+.container-cell.dimmed {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.status-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.cell-num {
+  font-size: 0.6rem;
+  color: #495057;
+  font-weight: 600;
+  line-height: 1;
+}
+
+
+/* ── Image map ── */
 .image-map-wrapper {
   position: relative;
   display: inline-block;
@@ -388,6 +430,7 @@ function showPopup(zone: HotspotZone, event: MouseEvent) {
   display: block;
   border-radius: 8px;
 }
+
 .hotspot-zone {
   position: absolute;
   border: 2px solid transparent;
@@ -399,24 +442,25 @@ function showPopup(zone: HotspotZone, event: MouseEvent) {
   justify-content: center;
   padding-bottom: 2px;
 }
+
 .hotspot-zone:hover,
 .hotspot-hover {
-  border-color: rgba(255, 255, 255, 0.8);
-  background: rgba(255, 255, 255, 0.12);
-  box-shadow: 0 0 12px rgba(255, 255, 255, 0.3), inset 0 0 20px rgba(255, 255, 255, 0.05);
+  border-color: rgba(255,255,255,0.8);
+  background: rgba(255,255,255,0.12);
+  box-shadow: 0 0 12px rgba(255,255,255,0.3), inset 0 0 20px rgba(255,255,255,0.05);
 }
+
 .hotspot-label {
   font-size: 0.65rem;
   font-weight: 600;
   color: transparent;
-  text-shadow: none;
-  background: transparent;
   padding: 1px 4px;
   border-radius: 3px;
   transition: all 0.2s;
   white-space: nowrap;
   pointer-events: none;
 }
+
 .hotspot-zone:hover .hotspot-label,
 .hotspot-hover .hotspot-label {
   color: #fff;
@@ -424,7 +468,7 @@ function showPopup(zone: HotspotZone, event: MouseEvent) {
   text-shadow: 0 1px 2px rgba(0,0,0,0.5);
 }
 
-/* Popup */
+/* ── Popup ── */
 .popup-overlay {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
@@ -435,6 +479,6 @@ function showPopup(zone: HotspotZone, event: MouseEvent) {
 }
 @keyframes popIn {
   from { opacity: 0; transform: scale(0.95); }
-  to { opacity: 1; transform: scale(1); }
+  to   { opacity: 1; transform: scale(1); }
 }
 </style>
