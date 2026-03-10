@@ -123,6 +123,12 @@ import SensorConfig from '../views/settings/SensorConfig.vue'
 import SsoLdap from '../views/settings/SsoLdap.vue'
 import SettingsAuditLogs from '../views/settings/SettingsAuditLogs.vue'
 import MultiLanguage from '../views/settings/MultiLanguage.vue'
+// Availability & Compliance
+import IsoClassRating from '../views/availability/IsoClassRating.vue'
+import UptimeMetrics from '../views/availability/UptimeMetrics.vue'
+import ComplianceChecklists from '../views/availability/ComplianceChecklists.vue'
+import DocumentEvidence from '../views/availability/DocumentEvidence.vue'
+import IncidentManagement from '../views/availability/IncidentManagement.vue'
 // Visualization
 import VisFloorPlan from '../views/visualization/VisFloorPlan.vue'
 import View3d from '../views/visualization/View3d.vue'
@@ -281,6 +287,13 @@ const routes = [
       { path: 'settings/sso', component: SsoLdap, meta: { title: 'SSO / LDAP', module: 'Settings', requiredTier: 'platinum', description: 'SSO / LDAP / Active Directory' } },
       { path: 'settings/audit-logs', component: SettingsAuditLogs, meta: { title: 'Audit Logs', module: 'Settings', requiredTier: 'plus', description: 'System audit logs' } },
       { path: 'settings/language', component: MultiLanguage, meta: { title: 'Multi-language', module: 'Settings', requiredTier: 'platinum', description: 'Multi-language support' } },
+
+      // Availability & Compliance
+      { path: 'availability', component: IsoClassRating, meta: { title: 'ISO Class 1–4 Rating', module: 'Availability & Compliance', requiredTier: 'plus', description: 'ISO/IEC 22237 availability class ratings per site and system' } },
+      { path: 'availability/uptime', component: UptimeMetrics, meta: { title: 'Uptime & Availability', module: 'Availability & Compliance', requiredTier: 'plus', description: 'Uptime, downtime, SLA compliance and MTTR metrics' } },
+      { path: 'availability/checklists', component: ComplianceChecklists, meta: { title: 'Compliance Checklists', module: 'Availability & Compliance', requiredTier: 'platinum', description: 'Structured ISO/IEC 22237 compliance requirement checklists' } },
+      { path: 'availability/documents', component: DocumentEvidence, meta: { title: 'Documents & Evidence', module: 'Availability & Compliance', requiredTier: 'platinum', description: 'Compliance document and evidence library' } },
+      { path: 'availability/incidents', component: IncidentManagement, meta: { title: 'Incident Management', module: 'Availability & Compliance', requiredTier: 'plus', description: 'Log and track data centre incidents with root cause analysis' } },
 
       // Visualization
       { path: 'visualization', component: VisFloorPlan, meta: { title: 'Floor Plan', module: 'Visualization', requiredTier: 'plus', description: '2D floor plan view' } },

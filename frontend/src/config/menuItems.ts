@@ -221,6 +221,19 @@ export const menuItems: MenuItem[] = [
     ],
   },
   {
+    label: 'Availability & Compliance',
+    icon: '📈',
+    route: '/availability',
+    tier: 'plus',
+    children: [
+      { label: 'ISO Class 1–4 Rating', route: '/availability', tier: 'plus', icon: '' },
+      { label: 'Uptime & Availability', route: '/availability/uptime', tier: 'plus', icon: '' },
+      { label: 'Incident Management', route: '/availability/incidents', tier: 'plus', icon: '' },
+      { label: 'Compliance Checklists', route: '/availability/checklists', tier: 'platinum', icon: '' },
+      { label: 'Documents & Evidence', route: '/availability/documents', tier: 'platinum', icon: '' },
+    ],
+  },
+  {
     label: 'Visualization',
     icon: '🌍',
     route: '/visualization',

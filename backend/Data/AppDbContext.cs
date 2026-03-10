@@ -149,4 +149,11 @@ public class AppDbContext : DbContext
 
     // Environmental (shared)
     public DbSet<SustainabilityMetric> SustainabilityMetrics => Set<SustainabilityMetric>();
+
+    // Availability & Compliance
+    public DbSet<IsoClassRating> IsoClassRatings => Set<IsoClassRating>();
+    public DbSet<UptimeRecord> UptimeRecords => Set<UptimeRecord>();
+    public DbSet<ComplianceChecklist> ComplianceChecklists => Set<ComplianceChecklist>();
+    public DbSet<EvidenceDocument> EvidenceDocuments => Set<EvidenceDocument>();
+    public DbSet<DcIncident> DcIncidents => Set<DcIncident>();
 }

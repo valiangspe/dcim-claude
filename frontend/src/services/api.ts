@@ -306,6 +306,19 @@ export const weatherLocationsApi = crudApi<WeatherLocation>('weather-locations')
 // ── Environmental (shared) API clients ──
 export const sustainabilityMetricsApi = crudApi<SustainabilityMetric>('sustainability-metrics')
 
+// ── Availability & Compliance ──
+export interface IsoClassRating { id: number; site: string; system: string; classRating: number; justification: string; assessedBy: string; assessedDate: string; status: string }
+export interface UptimeRecord { id: number; site: string; system: string; uptimeMinutes: number; downtimeMinutes: number; periodStart: string; periodEnd: string; slaTarget: number; incidents: number; notes: string }
+export interface ComplianceChecklist { id: number; category: string; requirement: string; isoReference: string; description: string; status: string; assignedTo: string; dueDate: string; evidence: string; notes: string }
+export interface EvidenceDocument { id: number; title: string; type: string; isoReference: string; description: string; fileName: string; fileSize: string; uploadedBy: string; uploadedDate: string; expiryDate: string; status: string; tags: string }
+export interface DcIncident { id: number; title: string; category: string; severity: string; status: string; affectedSystem: string; site: string; detectedAt: string; resolvedAt: string; reportedBy: string; assignedTo: string; rootCause: string; impact: string; resolution: string; downtimeMinutes: number; isoClass: string }
+
+export const isoClassRatingsApi = crudApi<IsoClassRating>('iso-class-ratings')
+export const uptimeRecordsApi = crudApi<UptimeRecord>('uptime-records')
+export const complianceChecklistsApi = crudApi<ComplianceChecklist>('compliance-checklists')
+export const evidenceDocumentsApi = crudApi<EvidenceDocument>('evidence-documents')
+export const dcIncidentsApi = crudApi<DcIncident>('dc-incidents')
+
 export async function seedDatabase() {
   return fetchApi<{ seeded: boolean }>('/seed', { method: 'POST' })
 }
