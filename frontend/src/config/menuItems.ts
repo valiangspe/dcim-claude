@@ -221,6 +221,23 @@ export const menuItems: MenuItem[] = [
     ],
   },
   {
+    label: 'Active Compliance Engine',
+    icon: '✅',
+    route: '/compliance',
+    tier: 'plus',
+    children: [
+      { label: 'Overview', route: '/compliance', tier: 'plus', icon: '' },
+      { label: 'UPS Bus Load', route: '/compliance/ups-load', tier: 'plus', icon: '' },
+      { label: 'Server Inlet Temp', route: '/compliance/inlet-temp', tier: 'plus', icon: '' },
+      { label: 'Phase Balance', route: '/compliance/phase-balance', tier: 'plus', icon: '' },
+      { label: 'Sensor / IIoT Health', route: '/compliance/sensor-health', tier: 'plus', icon: '' },
+      { label: 'Weekly Report', route: '/compliance/weekly', tier: 'plus', icon: '' },
+      { label: 'Monthly Report', route: '/compliance/monthly', tier: 'plus', icon: '' },
+      { label: 'Quarterly Report', route: '/compliance/quarterly', tier: 'plus', icon: '' },
+      { label: 'Annual Report', route: '/compliance/annual', tier: 'plus', icon: '' },
+    ],
+  },
+  {
     label: 'Availability & Compliance',
     icon: '📈',
     route: '/availability',

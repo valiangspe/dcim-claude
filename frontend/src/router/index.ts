@@ -123,6 +123,18 @@ import SensorConfig from '../views/settings/SensorConfig.vue'
 import SsoLdap from '../views/settings/SsoLdap.vue'
 import SettingsAuditLogs from '../views/settings/SettingsAuditLogs.vue'
 import MultiLanguage from '../views/settings/MultiLanguage.vue'
+// Compliance Reports
+import ComplianceReports from '../views/reports/ComplianceReports.vue'
+// Active Compliance Engine
+import ComplianceOverview from '../views/compliance/ComplianceOverview.vue'
+import UpsLoadCheck from '../views/compliance/UpsLoadCheck.vue'
+import InletTempCheck from '../views/compliance/InletTempCheck.vue'
+import PhaseBalanceCheck from '../views/compliance/PhaseBalanceCheck.vue'
+import SensorIIoT from '../views/compliance/SensorIIoT.vue'
+import WeeklyReport from '../views/compliance/WeeklyReport.vue'
+import MonthlyReport from '../views/compliance/MonthlyReport.vue'
+import QuarterlyReport from '../views/compliance/QuarterlyReport.vue'
+import AnnualReport from '../views/compliance/AnnualReport.vue'
 // Availability & Compliance
 import IsoClassRating from '../views/availability/IsoClassRating.vue'
 import UptimeMetrics from '../views/availability/UptimeMetrics.vue'
@@ -264,6 +276,8 @@ const routes = [
       { path: 'changes/audit-log', component: ChangesAuditLog, meta: { title: 'Audit Log', module: 'Change Management', requiredTier: 'platinum', description: 'Full change audit log' } },
       { path: 'changes/approvals', component: ApprovalWorkflows, meta: { title: 'Approval Workflows', module: 'Change Management', requiredTier: 'platinum', description: 'Approval workflow management' } },
 
+      { path: 'reports/compliance-engine', component: ComplianceReports, meta: { title: 'Active Compliance Engine', module: 'Reports & Analytics', requiredTier: 'plus', description: 'Weekly/Monthly/Quarterly/Annual compliance reports with Tier III, TIA-942, ISO 50001 gates' } },
+
       // Reports & Analytics
       { path: 'reports', component: StandardReports, meta: { title: 'Standard Reports', module: 'Reports & Analytics', requiredTier: 'standard', description: 'Power, cooling, space reports' } },
       { path: 'reports/pue-trends', component: PueTrends, meta: { title: 'PUE Trends', module: 'Reports & Analytics', requiredTier: 'plus', description: 'Historical PUE trends' } },
@@ -287,6 +301,17 @@ const routes = [
       { path: 'settings/sso', component: SsoLdap, meta: { title: 'SSO / LDAP', module: 'Settings', requiredTier: 'platinum', description: 'SSO / LDAP / Active Directory' } },
       { path: 'settings/audit-logs', component: SettingsAuditLogs, meta: { title: 'Audit Logs', module: 'Settings', requiredTier: 'plus', description: 'System audit logs' } },
       { path: 'settings/language', component: MultiLanguage, meta: { title: 'Multi-language', module: 'Settings', requiredTier: 'platinum', description: 'Multi-language support' } },
+
+      // Active Compliance Engine
+      { path: 'compliance', component: ComplianceOverview, meta: { title: 'Compliance Overview', module: 'Active Compliance Engine', requiredTier: 'plus', description: 'Active compliance KPI dashboard with threshold gates' } },
+      { path: 'compliance/ups-load', component: UpsLoadCheck, meta: { title: 'UPS Bus Load', module: 'Active Compliance Engine', requiredTier: 'plus', description: 'UPS bus load Tier III gate (<40% threshold)' } },
+      { path: 'compliance/inlet-temp', component: InletTempCheck, meta: { title: 'Server Inlet Temp', module: 'Active Compliance Engine', requiredTier: 'plus', description: 'Cabinet inlet temperature ASHRAE A1 gate' } },
+      { path: 'compliance/phase-balance', component: PhaseBalanceCheck, meta: { title: 'Phase Balance', module: 'Active Compliance Engine', requiredTier: 'plus', description: 'Voltage phase deviation gate (15%/25%)' } },
+      { path: 'compliance/sensor-health', component: SensorIIoT, meta: { title: 'Sensor / IIoT Health', module: 'Active Compliance Engine', requiredTier: 'plus', description: 'IIoT sensor connectivity and heartbeat monitoring' } },
+      { path: 'compliance/weekly', component: WeeklyReport, meta: { title: 'Weekly Report', module: 'Active Compliance Engine', requiredTier: 'plus', description: 'Weekly operational health report with XLSX export' } },
+      { path: 'compliance/monthly', component: MonthlyReport, meta: { title: 'Monthly Report', module: 'Active Compliance Engine', requiredTier: 'plus', description: 'Monthly efficiency & thermal report with XLSX export' } },
+      { path: 'compliance/quarterly', component: QuarterlyReport, meta: { title: 'Quarterly Report', module: 'Active Compliance Engine', requiredTier: 'plus', description: 'Quarterly capacity & redundancy report with XLSX export' } },
+      { path: 'compliance/annual', component: AnnualReport, meta: { title: 'Annual Report', module: 'Active Compliance Engine', requiredTier: 'plus', description: 'Annual SLA & compliance review with XLSX export' } },
 
       // Availability & Compliance
       { path: 'availability', component: IsoClassRating, meta: { title: 'ISO Class 1–4 Rating', module: 'Availability & Compliance', requiredTier: 'plus', description: 'ISO/IEC 22237 availability class ratings per site and system' } },
